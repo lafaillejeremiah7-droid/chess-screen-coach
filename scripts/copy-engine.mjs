@@ -1,31 +1,34 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const bin=path.join(root,'node_modules','stockfish','bin');
+const stockfish=path.join(root,'node_modules','stockfish');
 const dest=path.join(root,'public','engine');
-if(!fs.existsSync(bin)){
-  console.error('Stockfish not installed. Run npm install first.');process.exit(1);
+const folders=['bin','src'].map(d=>path.join(stockfish,d)).filter(p=>fs.existsSync(p));
+if(!folders.length){
+  console.error('Stockfish package not installed or missing its engine files. Run npm install.');
+  process.exit(1);
 }
-const files=fs.readdirSync(bin);
-const js=files.filter(f=>/\.js$/.test(f)&&/stockfish/i.test(f)).sort((a,b)=>{
-  const score=f=>(/lite-single/i.test(f)?100:/single/i.test(f)?75:/lite/i.test(f)?50:0)+(/\.js$/.test(f)?1:0);
-  return score(b)-score(a);
-});
-let chosen=null;
-for(const file of js){
-  const stem=file.replace(/\.js$/,'');
-  if(files.some(f=>f===stem+'.wasm')){chosen=file;break;}
+const score=f=>/lite-single/i.test(f)?100:/single/i.test(f)?70:/lite/i.test(f)?40:0;
+let chosen=null,folder=null;
+for(const directory of folders){
+  const all=fs.readdirSync(directory);
+  for(const file of all.filter(f=>/^stockfish.*\.js$/i.test(f)).sort((a,b)=>score(b)-score(a))){
+    const stem=file.slice(0,-3);
+    if(all.includes(stem+'.wasm')){chosen=file;folder=directory;break;}
+  }
+  if(chosen)break;
 }
 if(!chosen){
-  console.error('Could not locate a browser-compatible Stockfish JS + WASM pair in',bin,'\nAvailable:',files);
+  console.error('No matching Stockfish JS/WASM engine pair found in',folders.join(', '));
   process.exit(1);
 }
 const stem=chosen.slice(0,-3);
 fs.mkdirSync(dest,{recursive:true});
-for(const f of fs.readdirSync(dest))fs.rmSync(path.join(dest,f),{recursive:true,force:true});
-for(const f of files.filter(f=>f===chosen||f.startsWith(stem+'.'))){
-  fs.copyFileSync(path.join(bin,f),path.join(dest,f));
+for(const item of fs.readdirSync(dest))fs.rmSync(path.join(dest,item),{recursive:true,force:true});
+for(const file of fs.readdirSync(folder).filter(f=>f===chosen||f===stem+'.wasm'||f.startsWith(stem+'.'))){
+  fs.copyFileSync(path.join(folder,file),path.join(dest,file));
 }
 fs.writeFileSync(path.join(dest,'manifest.json'),JSON.stringify({worker:chosen,version:'stockfish'}));
-console.log('Copied Stockfish engine:',chosen);
+console.log('Packaged browser Stockfish:',chosen,'from',path.relative(root,folder));
