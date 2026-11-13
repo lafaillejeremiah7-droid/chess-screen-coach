@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#141b22"/>
+  <title>Chess Study Sidecar</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar"><div><h1>Chess Study Sidecar</h1><p>Private screen capture + local Stockfish analysis for practice and review</p></div><span class="pill">Study mode</span></header>
+    <div class="notice">For bot games, puzzles, and post-game analysis. Engine assistance during live games against people violates Chess.com fair-play rules.</div>
+    <main>
+      <section class="panel capture">
+        <h2>1. Share or upload a board</h2>
+        <p class="subtle">On desktop Chrome, share a window or tab. On iPhone, upload a screenshot instead. Drag a square around the chessboard, then choose <b>Read board</b>.</p>
+        <div class="toolbar">
+          <button id="share">Share screen</button>
+          <button id="stop" class="secondary">Stop sharing</button>
+          <label class="fileButton">Upload screenshot<input id="upload" type="file" accept="image/*" hidden/></label>
+        </div>
+        <div id="canvasWrap"><canvas id="source" width="960" height="540" aria-label="Screen capture preview; drag to select the board"></canvas><span id="placeholder">Share a screen or upload a screenshot to begin</span></div>
+        <p class="subtle">Drag from the board's top-left corner to its bottom-right corner. The selection is forced square.</p>
+        <div class="toolbar">
+          <button id="read">Read board</button>
+          <label class="switch"><input type="checkbox" id="auto"/> Auto-read every 3 seconds</label>
+        </div>
+        <p id="captureStatus" class="status" role="status">No screen selected.</p>
+      </section>
+      <section class="panel analysis">
+        <h2>2. Verify position</h2>
+        <div class="options">
+          <label>Bottom side<select id="orientation"><option value="white">White</option><option value="black">Black</option></select></label>
+          <label>To move<select id="turn"><option value="w">White</option><option value="b">Black</option></select></label>
+          <label>Castling rights<input id="castle" value="-" maxlength="4" placeholder="KQkq or -"/></label>
+          <label>En passant<input id="ep" value="-" maxlength="2" placeholder="-"/></label>
+        </div>
+        <div class="board" id="board" aria-label="Editable recognized chess position"></div>
+        <div class="palette" id="palette" aria-label="Select a piece to place on the board"></div>
+        <label class="fenLabel">FEN <textarea id="fen" rows="2" spellcheck="false"></textarea></label>
+        <div class="toolbar"><button id="analyze">Analyze position</button><button id="float" class="secondary">Float move panel</button><button id="loadFen" class="secondary">Load FEN</button><button id="reset" class="secondary">Starting position</button></div>
+        <p class="status" id="positionStatus" role="status">Check the recognized pieces before analysis.</p>
+        <div class="result"><div class="eyebrow">Stockfish recommendation</div><div id="best" class="best">—</div><div id="evaluation" class="subtle">Waiting for a position</div><div id="alternatives" class="alternatives"></div></div>
+      </section>
+    </main>
+    <footer>Analysis runs locally in your browser. Screenshots are not uploaded to a server. Board recognition uses piece-shape templates and may make mistakes; verify every position.</footer>
+  </div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
