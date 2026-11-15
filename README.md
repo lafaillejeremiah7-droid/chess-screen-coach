@@ -1,5 +1,72 @@
 # Python Chess Screen Coach
 
+## Recommended on Chromebook: no-screen-share Chrome extension
+
+**This avoids the screen-sharing video stream.** The extension reads chess piece
+classes from the visible Chess.com webpage, converts them to FEN, sends that
+text to your local Python server, and displays a single instruction at the
+top of the chess tab. No screenshots, video, or microphone permissions.
+
+**Supported pages:** `https://www.chess.com/play/computer` (computer/bot games)
+and `https://www.chess.com/analysis` (personal/post-game analysis).
+The extension is not injected into Chess.com's live human games. Using engine
+suggestions during games against other people violates fair-play rules.
+
+### Install the Chrome extension
+
+1. Download the repository ZIP from GitHub (**Code → Download ZIP**) and extract it
+   using the Chromebook Files app. If you have already cloned the repository,
+   update it using `git pull`.
+2. In Chrome, open `chrome://extensions`.
+3. Enable **Developer mode**, select **Load unpacked**, and open the
+   **extension** folder inside the extracted repository.
+4. Install the local Python dependencies in the Linux Terminal and run
+   `python3 server.py` as shown below. Only FEN chess-position text is sent
+   to `http://127.0.0.1:8765`.
+5. Open Chess.com **Play Bots** at
+   `https://www.chess.com/play/computer`. Start a fresh game from its
+   standard initial position. A dark top-of-tab overlay appears automatically
+   and shows `Move [piece] from [square] to [square]` on your turn.
+
+You **do not** need to open the old dashboard or click Share Screen.
+The overlay appears only on allowed pages, without a screen-sharing prompt.
+To hide it, turn off the extension in `chrome://extensions`.
+
+The extension reads the board every 1.2 seconds, and the Python backend
+tracks up to two legal half-moves between checks. It does not constantly run
+image recognition or send screen frames. It won't cure freezes caused by
+insufficient memory/storage, and the Linux Python process still needs system
+resources.
+
+**Limitations:** Start from the initial position. If you open a game already
+in progress, the initial turn/castling status is not knowable from pieces
+alone; use the manual FEN feature on the existing dashboard or restart a bot
+game. If more than two half-moves happen between checks or Chess.com changes
+its page structure, tracking stops rather than showing an unverified move.
+The extension only reads these supported webpages, **not** your Chromebook
+desktop or other applications. It has not been tested on your particular
+Chromebook.
+
+### Existing Python setup (needed once)
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip stockfish
+cd ~/chess-screen-coach
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 server.py
+```
+
+If `cd ~/chess-screen-coach` reports a missing directory, run
+`git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git`
+from your home folder first. **Do not run `git clone` into a folder that
+already exists.**
+
+---
+
+
 This is a **local Python chess coach** for puzzles, bot games, personal practice, and post-game review. It uses browser screen sharing to observe a chessboard, reads pieces from the captured image with local templates, then asks **Python + Stockfish** for the strongest legal move.
 
 The large display and Chrome floating window show **only** the requested instruction, e.g.:
