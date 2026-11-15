@@ -23,11 +23,20 @@ class ChessCoachTests(unittest.TestCase):
         self.assertTrue(tracked["changed"])
         self.assertEqual(tracked["fen"], next_board.fen())
 
-    def test_reject_skipped_moves(self):
+    def test_track_two_plies_from_fast_bot(self):
         start = chess.Board()
         after = start.copy()
         after.push_uci("e2e4")
         after.push_uci("e7e5")
+        tracked = advance_position(start.fen(), after.board_fen())
+        self.assertEqual(tracked["fen"], after.fen())
+
+    def test_reject_three_plies(self):
+        start = chess.Board()
+        after = start.copy()
+        after.push_uci("e2e4")
+        after.push_uci("e7e5")
+        after.push_uci("g1f3")
         with self.assertRaises(ValueError):
             advance_position(start.fen(), after.board_fen())
 
