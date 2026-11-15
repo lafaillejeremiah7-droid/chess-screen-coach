@@ -5,7 +5,6 @@ uses a locally installed Stockfish engine. The service only listens on loopback.
 """
 from __future__ import annotations
 
-import atexit
 import json
 import mimetypes
 import os
@@ -80,6 +79,26 @@ def analyze_fen(fen: str) -> dict:
     }
 
 
+def advance_position(previous: str, observed_placement: str) -> dict:
+    """Advance by exactly one legal move, preserving turn and castling rights."""
+    if not isinstance(previous, str) or not isinstance(observed_placement, str):
+        raise ValueError("Missing chess position")
+    board = chess.Board(previous)
+    if not board.is_valid():
+        raise ValueError("Previous position is invalid")
+    if board.board_fen() == observed_placement:
+        return {"fen": board.fen(), "changed": False}
+    matches = []
+    for move in board.legal_moves:
+        next_board = board.copy()
+        next_board.push(move)
+        if next_board.board_fen() == observed_placement:
+            matches.append(next_board.fen())
+    if len(matches) == 1:
+        return {"fen": matches[0], "changed": True}
+    raise ValueError("Cannot track one legal move; recognition may be wrong or moves were missed")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         # No image content or chess positions are logged.
@@ -96,7 +115,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/analyze":
+        endpoint = urlparse(self.path).path
+        if endpoint not in ("/api/analyze", "/api/track"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -105,7 +125,10 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Expected JSON object")
-            result = analyze_fen(data.get("fen"))
+            if endpoint == "/api/track":
+                result = advance_position(data.get("previous"), data.get("placement"))
+            else:
+                result = analyze_fen(data.get("fen"))
             self.respond_json(200, result)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.respond_json(400, {"error": str(exc)})
@@ -118,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond_json(200, {"python": True, "stockfish": ENGINE is not None})
         if path == "/":
             path = "/index.html"
+        if path == "/templates/pieces.json":
+            path = "/public/templates/pieces.json"
         # Only serve the specific files needed by the local browser interface.
         permitted = (
             path in ("/index.html", "/src/app.js", "/src/recognition.js", "/src/style.css")
@@ -145,7 +170,6 @@ def main() -> None:
     global ENGINE
     try:
         ENGINE = chess.engine.SimpleEngine.popen_uci(stockfish_location())
-        atexit.register(ENGINE.quit)
         print("Stockfish ready.")
     except Exception as exc:
         print(f"Stockfish unavailable: {exc}")
