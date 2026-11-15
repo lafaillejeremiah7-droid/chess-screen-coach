@@ -80,23 +80,46 @@ def analyze_fen(fen: str) -> dict:
 
 
 def advance_position(previous: str, observed_placement: str) -> dict:
-    """Advance by exactly one legal move, preserving turn and castling rights."""
+    """Advance by one or two legal half-moves, without guessing ambiguous paths.
+
+    A bot can respond faster than a low-frequency browser poll, so the new
+    board may be two half-moves ahead. Never infer more than two.
+    """
     if not isinstance(previous, str) or not isinstance(observed_placement, str):
         raise ValueError("Missing chess position")
+    if len(previous) > 120 or len(observed_placement) > 90:
+        raise ValueError("Chess position is too long")
     board = chess.Board(previous)
     if not board.is_valid():
         raise ValueError("Previous position is invalid")
     if board.board_fen() == observed_placement:
         return {"fen": board.fen(), "changed": False}
-    matches = []
+
+    first_positions = []
+    one_move_matches = []
     for move in board.legal_moves:
-        next_board = board.copy()
-        next_board.push(move)
-        if next_board.board_fen() == observed_placement:
-            matches.append(next_board.fen())
-    if len(matches) == 1:
-        return {"fen": matches[0], "changed": True}
-    raise ValueError("Cannot track one legal move; recognition may be wrong or moves were missed")
+        after = board.copy(stack=False)
+        after.push(move)
+        if after.board_fen() == observed_placement:
+            one_move_matches.append(after.fen())
+        first_positions.append(after)
+    if len(one_move_matches) == 1:
+        return {"fen": one_move_matches[0], "changed": True}
+    if len(one_move_matches) > 1:
+        raise ValueError("More than one legal move matches the new board")
+
+    two_move_matches = set()
+    for after in first_positions:
+        for reply in after.legal_moves:
+            finish = after.copy(stack=False)
+            finish.push(reply)
+            if finish.board_fen() == observed_placement:
+                two_move_matches.add(finish.fen())
+                if len(two_move_matches) > 1:
+                    raise ValueError("Ambiguous two-move transition; resync required")
+    if len(two_move_matches) == 1:
+        return {"fen": two_move_matches.pop(), "changed": True}
+    raise ValueError("Cannot track position within two moves; resync required")
 
 
 class Handler(BaseHTTPRequestHandler):
