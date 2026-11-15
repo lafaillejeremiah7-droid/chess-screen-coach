@@ -7,6 +7,7 @@ const frame = document.createElement('canvas');
 const frameCtx = frame.getContext('2d', {willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
+let previewTimer=null;
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
@@ -53,8 +54,16 @@ function redraw() {
   }
 }
 
-function animate() { if (stream || screenshot) redraw(); requestAnimationFrame(animate); }
-requestAnimationFrame(animate);
+function animate() {
+  clearTimeout(previewTimer);
+  previewTimer=null;
+  if (!stream || document.hidden) return;
+  redraw();
+  // Capture is only 4 fps. Do not repaint at display refresh rate, or repaint
+  // a static screenshot forever. readNow still captures when analysis needs it.
+  previewTimer=setTimeout(animate,250);
+}
+document.addEventListener('visibilitychange',animate);
 
 function canvasPoint(event) {
   const bounds=canvas.getBoundingClientRect();
@@ -69,6 +78,7 @@ canvas.addEventListener('pointerdown', event => {
   canvas.setPointerCapture(event.pointerId);
   const p=canvasPoint(event);
   drag={x:p.x,y:p.y,size:0,startX:p.x,startY:p.y};
+  redraw();
 });
 canvas.addEventListener('pointermove', event => {
   if (!drag) return;
@@ -77,11 +87,13 @@ canvas.addEventListener('pointermove', event => {
   drag.x=dx<0?drag.startX-size:drag.startX;
   drag.y=dy<0?drag.startY-size:drag.startY;
   drag.size=size;
+  redraw();
 });
 canvas.addEventListener('pointerup', async () => {
   if (!drag) return;
   const area=drag;
   drag=null;
+  redraw();
   const x=Math.max(0,area.x),y=Math.max(0,area.y);
   const size=Math.min(area.size,canvas.width-x,canvas.height-y);
   if (size<64) {status('Select the entire chessboard, not just one square.');return;}
@@ -103,6 +115,7 @@ $('share').onclick = async () => {
     await video.play();
     setupSize(video.videoWidth,video.videoHeight);
     screenshot=null;
+    animate();
     $('placeholder').hidden=true;
     status('Drag over the chessboard in the preview.');
     stream.getVideoTracks()[0].addEventListener('ended',()=>{

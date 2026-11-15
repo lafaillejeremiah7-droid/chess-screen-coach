@@ -32,11 +32,31 @@ You **do not** need to open the old dashboard or click Share Screen.
 The overlay appears only on allowed pages, without a screen-sharing prompt.
 To hide it, turn off the extension in `chrome://extensions`.
 
-The extension reads the board every 1.2 seconds, and the Python backend
-tracks up to two legal half-moves between checks. It does not constantly run
-image recognition or send screen frames. It won't cure freezes caused by
-insufficient memory/storage, and the Linux Python process still needs system
-resources.
+The extension reads the board after its pieces change, allowing 180 ms for
+animations to settle. An unchanged board causes no repeated board reads or
+Python requests. Hidden tabs pause their timers and board observer, and resume
+when you return. A lightweight check every two seconds finds newly mounted
+boards. The Python backend tracks up to two legal half-moves between readings.
+
+Stockfish uses **one thread, a 16 MiB hash, and a 0.2-second search budget**, with
+no background pondering. The hash is only part of its total memory use.
+Recent results are cached; overlapping requests are rejected instead of queued.
+Shorter searches reduce CPU work but can produce weaker moves in difficult
+positions. Tracking errors stop retrying the same position; temporary server
+failures retry after ten seconds. No screen frames or image recognition are
+used by the extension. Linux and Stockfish still require memory.
+
+### Update an existing installation
+
+1. Stop the old Python process with **Ctrl+C**. In your cloned project folder,
+   run `git pull --ff-only`, then `.venv/bin/python server.py`.
+2. If your unpacked extension points to a downloaded ZIP, download and extract
+   the new repository ZIP and replace/reload that extension folder too. Updating
+   the Linux clone does not update a separate copy in Downloads.
+3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
+   version is **0.3.0**. Reload the Chess.com tab and start a fresh bot game.
+4. Close the old screen-sharing dashboard and keep one coach tab open while
+   checking whether Chromebook lag has stopped.
 
 **Limitations:** Start from the initial position. If you open a game already
 in progress, the initial turn/castling status is not knowable from pieces
@@ -120,6 +140,7 @@ No screenshots are uploaded. Only chess position text is sent to the Python serv
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
+npm test
 ```
 
 If Stockfish is installed in a nonstandard location:

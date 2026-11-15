@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         signal:controller.signal
       });
       const data=await response.json();
-      sendResponse(response.ok?{ok:true,...data}:{ok:false,error:data.error||"Python error"});
+      sendResponse(response.ok?{ok:true,...data}:{ok:false,status:response.status,error:data.error||"Python error"});
     }catch(error){
       sendResponse({ok:false,error:"Python server unavailable. Start python3 server.py in Linux Terminal."});
     }finally{clearTimeout(timeout);}

@@ -10,6 +10,7 @@ import mimetypes
 import os
 import shutil
 import threading
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -20,6 +21,9 @@ import chess.engine
 ROOT = Path(__file__).resolve().parent
 ENGINE_LOCK = threading.Lock()
 ENGINE: chess.engine.SimpleEngine | None = None
+ANALYSIS_SECONDS = 0.2
+ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
+MAX_CACHED_POSITIONS = 128
 MAX_BODY = 2048
 PIECE_NAMES = {
     chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop",
@@ -66,17 +70,37 @@ def analyze_fen(fen: str) -> dict:
         return {"instruction": "Game over", "from": None, "to": None, "fen": board.fen()}
     if ENGINE is None:
         raise RuntimeError("Stockfish is unavailable. Install stockfish and restart Python server.")
-    with ENGINE_LOCK:
-        result = ENGINE.play(board, chess.engine.Limit(time=0.5))
-    move = result.move
-    if move is None:
-        raise RuntimeError("Stockfish did not return a legal move")
-    return {
-        "instruction": format_instruction(board, move),
-        "from": chess.square_name(move.from_square),
-        "to": chess.square_name(move.to_square),
-        "fen": board.fen(),
-    }
+    # Do not accumulate searches from multiple tabs on a small Chromebook.
+    if not ENGINE_LOCK.acquire(blocking=False):
+        raise RuntimeError("Engine busy. Keep one coach tab open and try again.")
+    try:
+        key = board.fen()
+        if key in ANALYSIS_CACHE:
+            ANALYSIS_CACHE.move_to_end(key)
+            return dict(ANALYSIS_CACHE[key])
+        result = ENGINE.play(board, chess.engine.Limit(time=ANALYSIS_SECONDS), ponder=False)
+        move = result.move
+        if move is None:
+            raise RuntimeError("Stockfish did not return a legal move")
+        answer = {
+            "instruction": format_instruction(board, move),
+            "from": chess.square_name(move.from_square),
+            "to": chess.square_name(move.to_square),
+            "fen": key,
+        }
+        ANALYSIS_CACHE[key] = answer
+        if len(ANALYSIS_CACHE) > MAX_CACHED_POSITIONS:
+            ANALYSIS_CACHE.popitem(last=False)
+        return dict(answer)
+    finally:
+        ENGINE_LOCK.release()
+
+
+def placement_key(board: chess.BaseBoard) -> tuple:
+    """Compare piece bitboards without serializing hundreds of FEN strings."""
+    return (board.pawns, board.knights, board.bishops, board.rooks,
+            board.queens, board.kings, board.occupied_co[chess.WHITE],
+            board.occupied_co[chess.BLACK])
 
 
 def advance_position(previous: str, observed_placement: str) -> dict:
@@ -92,7 +116,8 @@ def advance_position(previous: str, observed_placement: str) -> dict:
     board = chess.Board(previous)
     if not board.is_valid():
         raise ValueError("Previous position is invalid")
-    if board.board_fen() == observed_placement:
+    observed_key = placement_key(chess.BaseBoard(observed_placement))
+    if placement_key(board) == observed_key:
         return {"fen": board.fen(), "changed": False}
 
     first_positions = []
@@ -100,7 +125,7 @@ def advance_position(previous: str, observed_placement: str) -> dict:
     for move in board.legal_moves:
         after = board.copy(stack=False)
         after.push(move)
-        if after.board_fen() == observed_placement:
+        if placement_key(after) == observed_key:
             one_move_matches.append(after.fen())
         first_positions.append(after)
     if len(one_move_matches) == 1:
@@ -113,7 +138,7 @@ def advance_position(previous: str, observed_placement: str) -> dict:
         for reply in after.legal_moves:
             finish = after.copy(stack=False)
             finish.push(reply)
-            if finish.board_fen() == observed_placement:
+            if placement_key(finish) == observed_key:
                 two_move_matches.add(finish.fen())
                 if len(two_move_matches) > 1:
                     raise ValueError("Ambiguous two-move transition; resync required")
@@ -193,8 +218,12 @@ def main() -> None:
     global ENGINE
     try:
         ENGINE = chess.engine.SimpleEngine.popen_uci(stockfish_location())
-        print("Stockfish ready.")
+        ENGINE.configure({"Threads": 1, "Hash": 16})
+        print("Stockfish ready: 1 thread, 16 MiB hash, 0.2-second searches; no pondering.")
     except Exception as exc:
+        if ENGINE is not None:
+            ENGINE.close()
+            ENGINE = None
         print(f"Stockfish unavailable: {exc}")
     port = int(os.getenv("PORT", "8765"))
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)

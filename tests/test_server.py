@@ -1,6 +1,9 @@
 """Unit checks for move wording and legal position tracking."""
 import unittest
+from unittest.mock import Mock, patch
 import chess
+import chess.engine
+import server
 from server import format_instruction, advance_position
 
 
@@ -44,6 +47,77 @@ class ChessCoachTests(unittest.TestCase):
         board = chess.Board()
         with self.assertRaises(ValueError):
             format_instruction(board, chess.Move.from_uci("g1e2"))
+
+    def test_track_special_moves(self):
+        cases = [
+            ("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", "e1g1"),
+            ("4k3/P7/8/8/8/8/8/4K3 w - - 0 1", "a7a8n"),
+            ("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1", "e5d6"),
+        ]
+        for fen, move in cases:
+            with self.subTest(move=move):
+                after = chess.Board(fen)
+                after.push_uci(move)
+                self.assertEqual(advance_position(fen, after.board_fen())["fen"], after.fen())
+
+    def test_reject_malformed_observed_placement(self):
+        with self.assertRaises(ValueError):
+            advance_position(chess.Board().fen(), "not a board")
+
+
+class AnalysisWorkloadTests(unittest.TestCase):
+    def setUp(self):
+        server.ANALYSIS_CACHE.clear()
+        self.engine = Mock()
+        self.engine.play.side_effect = lambda board, *args, **kwargs: chess.engine.PlayResult(
+            next(iter(board.legal_moves)), None)
+        self.engine_patch = patch.object(server, "ENGINE", self.engine)
+        self.engine_patch.start()
+
+    def tearDown(self):
+        self.engine_patch.stop()
+        server.ANALYSIS_CACHE.clear()
+
+    def test_same_position_reuses_analysis_without_another_engine_search(self):
+        board = chess.Board()
+        first = server.analyze_fen(board.fen())
+        self.assertIn(chess.Move.from_uci(first["from"] + first["to"]), board.legal_moves)
+        original = dict(first)
+        first["instruction"] = "Caller changed the returned dictionary"
+        self.assertEqual(server.analyze_fen(board.fen()), original)
+        self.assertEqual(self.engine.play.call_count, 1)
+
+    def test_different_positions_are_analyzed_and_cache_is_bounded(self):
+        with patch.object(server, "MAX_CACHED_POSITIONS", 2):
+            board = chess.Board()
+            initial_fen = board.fen()
+            server.analyze_fen(initial_fen)
+            for move in ("e2e4", "e7e5"):
+                board.push_uci(move)
+                server.analyze_fen(board.fen())
+            self.assertEqual(len(server.ANALYSIS_CACHE), 2)
+            self.assertNotIn(initial_fen, server.ANALYSIS_CACHE)
+            self.assertEqual(self.engine.play.call_count, 3)
+
+    def test_busy_engine_does_not_queue_more_searches(self):
+        with server.ENGINE_LOCK:
+            with self.assertRaisesRegex(RuntimeError, "Engine busy"):
+                server.analyze_fen(chess.Board().fen())
+        self.engine.play.assert_not_called()
+
+    def test_engine_failure_releases_lock_and_can_be_retried(self):
+        self.engine.play.side_effect = RuntimeError("Temporary engine failure")
+        with self.assertRaisesRegex(RuntimeError, "Temporary"):
+            server.analyze_fen(chess.Board().fen())
+        self.assertFalse(server.ENGINE_LOCK.locked())
+        self.assertFalse(server.ANALYSIS_CACHE)
+
+    def test_invalid_engine_move_is_never_cached(self):
+        self.engine.play.side_effect = None
+        self.engine.play.return_value = chess.engine.PlayResult(chess.Move.from_uci("e2e5"), None)
+        with self.assertRaisesRegex(ValueError, "not legal"):
+            server.analyze_fen(chess.Board().fen())
+        self.assertFalse(server.ANALYSIS_CACHE)
 
 
 if __name__ == "__main__":
