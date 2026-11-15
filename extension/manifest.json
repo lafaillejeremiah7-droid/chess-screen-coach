@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Chess Study Coach — No Screen Share",
+  "version": "0.2.0",
+  "description": "Read chess positions directly from permitted bot and analysis pages; send FEN to local Python Stockfish. No screen recording.",
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.chess.com/play/computer*",
+        "https://www.chess.com/analysis*"
+      ],
+      "js": [
+        "board.js",
+        "content.js"
+      ],
+      "css": [
+        "overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
