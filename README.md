@@ -1,68 +1,62 @@
-# Chess Study Sidecar
+# Python Chess Screen Coach
 
-A privacy-focused, browser-based chess analysis sidecar for **permitted study**: bot games, puzzles, personal analysis, and post-game review. It accepts a desktop screen share or screenshot, recognizes pieces using local image templates, and asks a locally running Stockfish engine for the strongest moves. Desktop Chrome can show recommendations in an always-on-top Picture-in-Picture window.
+This is a **local Python chess coach** for puzzles, bot games, personal practice, and post-game review. It uses browser screen sharing to observe a chessboard, reads pieces from the captured image with local templates, then asks **Python + Stockfish** for the strongest legal move.
 
-> **Fair play:** Do not use engine suggestions in live games against other people on Chess.com or other sites. That violates their fair-play rules and can result in account restrictions.
+The large display and Chrome floating window show **only** the requested instruction, e.g.:
 
-## What works
+> Move knight from g8 to f6
 
-- Desktop Chrome screen sharing (`getDisplayMedia`) with user permission; no video is sent to a server.
-- Uploading a Chess.com screenshot, including from iPhone.
-- Dragging a square around the board, recognizing the 64 squares, and correcting any misread pieces.
-- Position input/output via FEN, with explicit side-to-move, castling and en-passant controls.
-- Tracking a single legal move between consecutive screenshots to preserve turn, castling rights and en-passant state.
-- Local Stockfish analysis (depth 16, MultiPV 3), move notation and evaluation.
-- Floating recommendations window via Document Picture-in-Picture in supported desktop Chrome versions.
-- Optional auto-read every three seconds, intended for permitted bot/practice sessions.
+**Fair play:** Never use engine assistance in live games against other people where it is prohibited. This tool is meant for permitted analysis.
 
-## Limitations
+## Chromebook setup (Linux development environment)
 
-- **iPhone:** iOS does not let a normal web page float an always-on-top panel over the Chess.com app. Use screenshot uploads, or use desktop Chrome for screen share and floating panel.
-- The screenshot recognizer is calibrated to the standard green Chess.com board and the supplied piece style. Other themes and boards can be misread. Always verify the 64-square position before trusting the result.
-- A single screenshot does **not** reveal whose turn it is, castling rights, or en-passant rights. Set these explicitly for the first position. Subsequent *single* legal moves can be tracked automatically; missed frames may require manual correction.
-- This is not a native Chess.com plugin and does not read game data from Chess.com servers.
-- Stockfish WASM can take time to initialize on low-memory devices.
-
-## Run locally
-
-Requirements: Node.js 20+ and npm.
+1. On your Chromebook, enable **Settings → Developers → Linux development environment** if it is not already enabled.
+2. Open the Linux Terminal.
+3. Run:
 
 ```bash
-npm install
-npm run dev
+sudo apt update
+sudo apt install -y python3-venv stockfish git
+git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git
+cd chess-screen-coach
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python server.py
 ```
 
-Open the local URL shown by Vite (usually http://localhost:5173). The first command installs `chess.js`, `stockfish` and Vite. The second copies the browser-compatible Stockfish JS+WASM engine into the public assets directory. If the Stockfish npm package changes its binary filenames, `scripts/copy-engine.mjs` will locate the matching JS+WASM pair or fail with an explicit message.
+4. Open **http://localhost:8765** in desktop Chrome. Keep the Python terminal running.
+5. Click **Share screen** and choose the chess tab/window containing a *permitted practice position*. In the preview, drag a square around the full board.
+6. Set **Board bottom**, **My pieces**, and **Whose turn when starting?**. The app will read the selected area and then check every two seconds for a single legal move.
+7. Click **Show floating move at top of screen** for a movable always-on-top Chrome Document Picture-in-Picture window. You can drag the panel to the top. This requires a supported desktop Chrome browser and a click to open it.
 
-To build for static hosting:
+For a screenshot: select **Upload screenshot**, then select the board area. To correct recognition or missed moves, use **Read / resync board** or the FEN field.
+
+### How it works
+
+- Browser JavaScript requests screen sharing (a browser security requirement) and does local image template recognition.
+- The recognized FEN goes to your own `127.0.0.1:8765` Python server.
+- Python validates the FEN with `python-chess`; Stockfish runs as a local subprocess. It returns the move in plain English.
+- Python also tracks **one legal move between captures**, preserving turn and castling rights.
+
+No screenshots are uploaded. Only chess position text is sent to the Python server on your Chromebook. The Python server binds to loopback and is not public.
+
+### Limitations
+
+- Board recognition is calibrated to the default green Chess.com board/piece style. Errors are possible. Verify positions before relying on suggestions.
+- The first image cannot reveal whose turn it is, en passant rights, or whether a king/rook moved. Set initial turn explicitly and choose castling rights if needed.
+- A missed pair of moves cannot be safely inferred. Use **Read / resync board** and set the actual turn; manually enter FEN for reliable recovery.
+- A webpage cannot open a floating window without your click. Chrome's Picture-in-Picture is browser-dependent; it may not work on mobile.
+- This Python app **cannot run on GitHub Pages**, which hosts static sites only. Running `python server.py` locally is required. The old JavaScript-only static-site deployment has been replaced by checks.
+
+### Run tests
 
 ```bash
-npm run build
-npm run preview
+python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-## Deploy on GitHub Pages
-
-1. Create a new GitHub repository named `chess-study-sidecar`.
-2. Push this folder's contents to its `main` branch.
-3. In **Settings → Pages**, select **GitHub Actions** as the source.
-4. The workflow in `.github/workflows/pages.yml` installs dependencies, builds the app, and deploys `dist/`.
-5. Open the deployed HTTPS URL in desktop Chrome, share the Chess.com practice tab, and select the board.
-
-The app works on GitHub Pages without a backend. No OpenAI API key is required.
-
-## Testing
+If Stockfish is installed in a nonstandard location:
 
 ```bash
-npm test
+STOCKFISH_PATH=/absolute/path/to/stockfish python server.py
 ```
-
-The unit tests cover board orientation, FEN round-trips, and empty-square detection. Full browser, engine, and deployment integration tests require dependencies and a supported browser.
-
-## Privacy
-
-Screenshot recognition and Stockfish evaluation run locally. The app does not upload images or FEN to a server. GitHub Pages still serves the static assets as any website does; it does not receive your screen capture.
-
-## Attribution
-
-Stockfish is free software licensed under GPLv3. The npm `stockfish` package is distributed under its own upstream license and must retain its required notices if redistributed. `chess.js` is licensed under BSD-2-Clause. Consult their upstream licenses before redistribution or modification.
