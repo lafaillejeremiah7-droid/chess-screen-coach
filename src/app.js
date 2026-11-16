@@ -10,7 +10,7 @@ captureProbe.width=captureProbe.height=32;
 const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
-let previewTimer=null;
+let previewTimer=null, captureInterrupted=false;
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
@@ -183,16 +183,20 @@ async function readNow(resync=false) {
     redraw();
     if(stream && (!video || video.readyState<2 || stream.getVideoTracks().some(t=>t.muted||t.readyState!=='live'))){
       ++requestNumber;
+      captureInterrupted=true;
       display('Capture unavailable');
       status('Screen capture is paused or ended. Check Chrome screen sharing, then resume.');
       return;
     }
     if(captureIsBlack()){
       ++requestNumber;
+      captureInterrupted=true;
       display('Board temporarily unavailable');
       status('Captured chessboard is black. Waiting for a visible frame; no position update made.');
       return;
     }
+    const recovered=captureInterrupted;
+    captureInterrupted=false;
     const orientation=$('orientation').value;
     const result=await readBoard(frame,crop,templates,orientation);
     if (result.lowConfidence>6)
@@ -206,7 +210,7 @@ async function readNow(resync=false) {
       const tracked=await api('/api/track',{previous:currentFen,placement:observed});
       currentFen=tracked.fen;
       $('fen').value=currentFen;
-    } else return;
+    } else if (!recovered) return;
 
     if (currentFen.split(' ')[1]!==$('myColor').value) {
       ++requestNumber;
