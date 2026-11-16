@@ -10,7 +10,7 @@ captureProbe.width=captureProbe.height=32;
 const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
-let previewTimer=null, captureInterrupted=false;
+let previewTimer=null, captureInterrupted=false,coachHidden=false,wasFloating=false,lastControlAt=0;
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
@@ -27,6 +27,7 @@ async function api(path, payload) {
 }
 
 function display(instruction) {
+  if(coachHidden)return;
   $('move').textContent = instruction;
   if (pipWin && !pipWin.closed) {
     const target=pipWin.document.getElementById('instruction');
@@ -67,7 +68,7 @@ function redraw() {
 function animate() {
   clearTimeout(previewTimer);
   previewTimer=null;
-  if (!stream || document.hidden) return;
+  if (!stream || document.hidden || coachHidden) return;
   redraw();
   // Capture is only 4 fps. Do not repaint at display refresh rate, or repaint
   // a static screenshot forever. readNow still captures when analysis needs it.
@@ -160,11 +161,12 @@ function castlingFor(placementValue) {
 }
 
 async function recommend(fen) {
+  if(coachHidden)return;
   const sequence=++requestNumber;
   display('Analyzing…');
   try {
     const result=await api('/api/analyze',{fen});
-    if (sequence!==requestNumber || currentFen!==fen) return;
+    if (coachHidden || sequence!==requestNumber || currentFen!==fen) return;
     display(result.instruction);
     status('Ready. Watching the board for the next move.');
   }catch(error){
@@ -175,7 +177,7 @@ async function recommend(fen) {
 }
 
 async function readNow(resync=false) {
-  if(busy||!crop)return;
+  if(busy||!crop||coachHidden)return;
   busy=true;
   try {
     if (!templates) throw Error('Board recognition templates are not ready.');
@@ -244,25 +246,76 @@ $('analyzeFen').onclick=async()=>{
   }catch(error){status(error.message);}
 };
 
-$('float').onclick=async()=>{
+async function openFloating(){
   if(!window.documentPictureInPicture){
     status('Floating move panel requires a recent desktop Chrome version.');
     return;
   }
   try {
-    pipWin=await documentPictureInPicture.requestWindow({width:490,height:120});
+    pipWin=await documentPictureInPicture.requestWindow({width:300,height:86});
+    wasFloating=true;
     const style=pipWin.document.createElement('style');
-    style.textContent='html,body{margin:0;width:100%;height:100%;background:#102030;color:#fff;font-family:system-ui,sans-serif;}body{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;}#instruction{font-size:25px;text-align:center;font-weight:750;line-height:1.25;}';
+    style.textContent='html,body{margin:0;width:100%;height:100%;background:#102030;color:#fff;font-family:system-ui,sans-serif;}body{display:flex;align-items:center;justify-content:center;padding:6px;box-sizing:border-box;}#instruction{font-size:14px;text-align:center;font-weight:700;line-height:1.2;}';
     pipWin.document.head.append(style);
     const text=pipWin.document.createElement('div');
     text.id='instruction';
     text.textContent=$('move').textContent;
     pipWin.document.body.replaceChildren(text);
+    pipWin.document.addEventListener('keydown',handleCoachKey,true);
   }catch(error){status('Cannot open floating panel: '+error.message);}
-};
+}
+$('float').onclick=()=>{if(!coachHidden)void openFloating();};
+
+
+function updatePaused(hidden){
+  if(coachHidden===hidden)return;
+  coachHidden=hidden;
+  ++requestNumber; // Any pending move response is now stale.
+  document.body.classList.toggle('coach-paused',hidden);
+  if(hidden){
+    if(pipWin && !pipWin.closed){
+      wasFloating=true;
+      pipWin.close();
+    }
+    pipWin=null;
+    clearTimeout(previewTimer);previewTimer=null;
+    $('move').textContent='';
+    status('Coach hidden. Press H to resume.');
+  }else{
+    status('Coach visible. Resume analysis when ready.');
+    animate();
+  }
+}
+
+function handleCoachKey(event){
+  if(event.key?.toLowerCase()!=='h'||event.repeat||event.isComposing||
+     event.altKey||event.ctrlKey||event.metaKey)return;
+  const target=event.target;
+  if(['INPUT','TEXTAREA','SELECT'].includes(target?.tagName?.toUpperCase?.())||
+     target?.isContentEditable||target?.closest?.('[contenteditable],[role="textbox"]'))return;
+  event.preventDefault();event.stopPropagation();
+  const next=!coachHidden;
+  updatePaused(next);
+  lastControlAt=Date.now();
+  // A direct keypress allows opening the PiP again on supporting browsers.
+  if(!next && wasFloating){wasFloating=false;void openFloating();}
+  void api('/api/control',{hidden:next}).catch(e=>status('Visibility sync unavailable: '+e.message));
+}
+document.addEventListener('keydown',handleCoachKey,true);
+
+// When H is pressed in a Chess.com tab, the extension updates the same server.
+setInterval(async()=>{
+  if(Date.now()-lastControlAt<1900)return;
+  try{
+    const response=await fetch('/api/control');
+    if(!response.ok)return;
+    const state=await response.json();
+    if(typeof state.hidden==='boolean')updatePaused(state.hidden);
+  }catch{/* Local Python server not available. */}
+},1400);
 
 setInterval(()=>{
-  if($('auto').checked && stream && crop)readNow(false);
+  if(!coachHidden && $('auto').checked && stream && crop)readNow(false);
 },2000);
 
 (async()=>{
