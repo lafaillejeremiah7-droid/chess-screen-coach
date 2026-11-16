@@ -90,3 +90,34 @@ test("rejects stale or mismatched embedded FEN",()=>{
   const board=fakeBoard(500,nodes,{"data-fen":initialFen+" w KQkq - 0 1"});
   assert.equal(snapshot({querySelectorAll(){return [board];}}).fen,null);
 });
+
+test("declared player color is separate from board orientation",()=>{
+  const pieces=classesFromFen(initialFen).map(cls=>({
+    getAttribute(name){return name==="class"?cls:null;},
+    closest(){return null;}
+  }));
+  const board={
+    getBoundingClientRect(){return {width:480,height:480};},
+    querySelectorAll(){return pieces;},
+    classList:{contains(name){return name==="flipped";}},
+    getAttribute(name){return name==="data-player-color"?"white":null;}
+  };
+  const result=globalThis.ChessCoachBoard.snapshot({querySelectorAll(){return [board];}});
+  assert.equal(result.bottomColor,"b");
+  assert.equal(result.playerColor,"w");
+});
+test("unspecified player color stays unknown rather than equaling orientation",()=>{
+  const pieces=classesFromFen(initialFen).map(cls=>({
+    getAttribute(name){return name==="class"?cls:null;},
+    closest(){return null;}
+  }));
+  const board={
+    getBoundingClientRect(){return {width:480,height:480};},
+    querySelectorAll(){return pieces;},
+    classList:{contains(name){return name==="flipped";}},
+    getAttribute(){return null;}
+  };
+  const result=globalThis.ChessCoachBoard.snapshot({querySelectorAll(){return [board];}});
+  assert.equal(result.playerColor,null);
+  assert.equal(result.bottomColor,"b");
+});
