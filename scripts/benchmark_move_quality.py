@@ -115,6 +115,7 @@ def run_benchmark(count=110, quick=0.2, reference=0.9):
     results=[]
     engine=chess.engine.SimpleEngine.popen_uci(server.stockfish_location())
     engine.configure({"Threads":1,"Hash":16})
+    engine_name=engine.id.get("name")
     start=time.monotonic()
     try:
         print("ENGINE",engine.id,flush=True)
@@ -151,7 +152,7 @@ def run_benchmark(count=110, quick=0.2, reference=0.9):
             if v["centipawn_loss_estimate"] is not None]
     report={
         "method":"Fast Stockfish move versus longer same-engine search; forced-move rescoring",
-        "engine":engine.id.get("name"),"hardware":"GitHub Actions Linux runner",
+        "engine":engine_name,"hardware":"GitHub Actions Linux runner",
         "quick_seconds":quick,"reference_seconds":reference,
         "samples":len(results),
         "categories":{k:sum(x["category"]==k for x in results)
