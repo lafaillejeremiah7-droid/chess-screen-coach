@@ -1,0 +1,73 @@
+name: One-time move quality audit
+
+on:
+  push:
+    branches: [audit-move-strength-20261115]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Compare existing 0.2-second engine move with 1.5-second reference
+        run: |
+          python - <<'PY'
+          import statistics
+          import chess
+          import chess.engine
+          import server
+          openings = {
+            "Italian":"e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O Re1 a6",
+            "Ruy Lopez":"e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O",
+            "Sicilian":"e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3 e5 Nb3 Be6",
+            "Caro-Kann":"e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7",
+            "French":"e4 e6 d4 d5 Nc3 Nf6 Bg5 Be7 e5 Nfd7 Bxe7 Qxe7",
+            "Queen's Gambit":"d4 d5 c4 e6 Nc3 Nf6 Bg5 Be7 e3 O-O Nf3 h6 Bh4 b6",
+            "King's Indian":"d4 Nf6 c4 g6 Nc3 Bg7 e4 d6 Nf3 O-O Be2 e5 O-O Nc6",
+            "English":"c4 e5 Nc3 Nf6 g3 d5 cxd5 Nxd5 Bg2 Nb6 Nf3 Nc6",
+            "Scandinavian":"e4 d5 exd5 Qxd5 Nc3 Qa5 d4 c6 Nf3 Nf6 Bc4 Bf5",
+            "London":"d4 Nf6 Nf3 d5 Bf4 e6 e3 Bd6 Bg3 O-O Bd3 c5",
+            "Scotch":"e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Bc5 Nxc6 bxc6 Bd3",
+            "Fried Liver":"e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5 Nxf7",
+            "Evans Gambit":"e4 e5 Nf3 Nc6 Bc4 Bc5 b4 Bxb4 c3 Ba5 d4 exd4",
+            "King's Gambit":"e4 e5 f4 exf4 Nf3 g5 h4 g4 Ne5 Nf6 Bc4 d5",
+            "Nimzo-Indian":"d4 Nf6 c4 e6 Nc3 Bb4 e3 O-O Bd3 d5 Nf3 c5"
+          }
+          positions=[]
+          for name,line in openings.items():
+            board=chess.Board()
+            for i,san in enumerate(line.split(),start=1):
+              board.push_san(san)
+              if i in (8,12) and not board.is_game_over():
+                positions.append((f"{name}@ply{i}",board.copy(stack=False)))
+          engine=chess.engine.SimpleEngine.popen_uci(server.stockfish_location())
+          engine.configure({"Threads":1,"Hash":16,"MultiPV":1})
+          print("ENGINE",engine.id,flush=True)
+          results=[]
+          try:
+            for label,board in positions:
+              result=engine.play(board,chess.engine.Limit(time=0.2),ponder=False)
+              move=result.move
+              reference=engine.analyse(board,chess.engine.Limit(time=1.5))
+              best=reference["pv"][0]
+              forced=engine.analyse(board,chess.engine.Limit(time=1.5),root_moves=[move])
+              score_best=reference["score"].pov(board.turn).score(mate_score=100000)
+              score_forced=forced["score"].pov(board.turn).score(mate_score=100000)
+              gap=max(0,score_best-score_forced)
+              results.append((label,move.uci(),best.uci(),gap))
+              print(f"POSITION {label:<22} fast={move.uci():<5} ref={best.uci():<5} gap_cp={gap}",flush=True)
+          finally:
+            engine.quit()
+          agree=sum(x[1]==x[2] for x in results)
+          gaps=[x[3] for x in results]
+          print("SUMMARY",f"n={len(results)}",f"agreement={agree}/{len(results)}",
+            f"mean_cp_gap={statistics.mean(gaps):.1f}",f"median_cp_gap={statistics.median(gaps):.1f}",
+            f"gap_gt100={sum(x>100 for x in gaps)}",
+            "reference_time=1.5s",flush=True)
+          PY
