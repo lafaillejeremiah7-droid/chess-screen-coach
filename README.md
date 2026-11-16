@@ -13,8 +13,8 @@
    if the bottom player and your color are not the same. The Auto setting
    remembers the first inferred color and does not switch when the board flips.
    Explicit `data-player-color` metadata takes priority when Auto is chosen.
-2. Choose a bounded analysis time: **0.2, 0.5, 1, or 2 seconds**. Default 0.2
-   retains the older Chromebook CPU budget. Search time is passed through the
+2. Choose a bounded analysis time: **0.2, 0.5, 1, or 2 seconds**. Default **1 second**
+   prioritizes stronger move calculation. Select 0.2 seconds for lower CPU use. Search time is passed through the
    extension and validated by Python; cached results distinguish budgets.
 3. Optionally enable factual analysis details on computer/practice or personal
    analysis pages: check/capture/castle/mate when applicable, reported search
@@ -69,7 +69,7 @@ Python requests. Hidden tabs pause their timers and board observer, and resume
 when you return. A lightweight check every four seconds retries after missed mutations and finds newly mounted
 boards. Temporary incomplete boards are rechecked, and the largest visible compatible board is preferred. The Python backend tracks up to two legal half-moves between readings.
 
-Stockfish uses **one thread, a 16 MiB hash, and a 0.2-second search budget**, with
+Stockfish uses **one thread, a 16 MiB hash, and a 1-second search budget by default in v0.5.0**, with
 no background pondering. The hash is only part of its total memory use.
 Recent results are cached; overlapping requests are rejected instead of queued.
 Shorter searches reduce CPU work but can produce weaker moves in difficult
@@ -193,3 +193,7 @@ If Chess.com temporarily removes the board or replaces its DOM element during a 
 
 ### Screen-share capture blackout protection (v0.4.2)
 The legacy dashboard now detects near-black sampled chessboard frames or paused display-capture tracks. It stops recognition without overwriting the last verified position, indicates a capture problem, and tries again on the next scheduled check. When a readable capture returns, the dashboard can restore the displayed move even if the chess position is unchanged. If the actual Chess.com page itself is black, this does not repair a browser/GPU rendering failure.
+
+### Search-time default change
+
+The v0.5.0 branch uses **1 second by default** across the Python API, extension overlay and extension settings. Explicitly saved preferences (including 0.2 seconds) are respected; switching versions does not overwrite user-selected times. The prior 0.4.2 extension does not support analysis-time settings. Installing this version requires both the updated extension and Python server.
