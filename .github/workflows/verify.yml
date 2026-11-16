@@ -24,3 +24,58 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run Python chess and API unit tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Install actual Stockfish binary
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Verify real engine and localhost HTTP API
+        run: |
+          python - <<'PY'
+          import json
+          import threading
+          import urllib.error
+          import urllib.request
+          from http.server import ThreadingHTTPServer
+          import chess
+          import chess.engine
+          import server
+
+          server.ENGINE = chess.engine.SimpleEngine.popen_uci(server.stockfish_location())
+          server.ENGINE.configure({"Threads": 1, "Hash": 16})
+          http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+          thread = threading.Thread(target=http.serve_forever, daemon=True)
+          thread.start()
+          base = f"http://127.0.0.1:{http.server_port}"
+
+          def request(path, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  base + path, data=data,
+                  headers={"Content-Type": "application/json"} if data else {})
+              with urllib.request.urlopen(req, timeout=10) as response:
+                  return response.status, json.loads(response.read())
+
+          try:
+              status, health = request("/api/health")
+              assert status == 200 and health["python"] and health["stockfish"]
+              board = chess.Board()
+              status, answer = request("/api/analyze", {"fen": board.fen()})
+              move = chess.Move.from_uci(answer["from"] + answer["to"])
+              assert status == 200 and move in board.legal_moves
+              assert answer["instruction"].startswith("Move ")
+              print("Real Stockfish:", answer["instruction"])
+              after = board.copy()
+              after.push_uci("e2e4")
+              status, tracked = request("/api/track", {
+                  "previous": board.fen(), "placement": after.board_fen()})
+              assert status == 200 and tracked["fen"] == after.fen()
+              try:
+                  request("/api/analyze", {"fen": "not a fen"})
+                  raise AssertionError("Invalid FEN was accepted")
+              except urllib.error.HTTPError as error:
+                  assert error.code == 400
+              print("HTTP health, analyze, tracking, invalid-input checks: passed")
+          finally:
+              http.shutdown()
+              http.server_close()
+              server.ENGINE.quit()
+              server.ENGINE = None
+          PY
