@@ -75,6 +75,12 @@ function harness(respond,pathname='/play/computer',options=null){
   };
 }
 
+test('default engine request uses one second',async()=>{
+  const h=harness();
+  await h.advance(0);
+  const first=h.requests.find(message=>message.action==='analyze');
+  assert.equal(first.seconds,1);
+});
 test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
