@@ -44,9 +44,8 @@
     return location.protocol==="https:"&&
       (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
-  // Human-vs-human games never receive engine move suggestions.
-  const analysisAllowed=()=>/^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname);
-  const active=()=>eligible()&&analysisAllowed()&&!document.hidden&&!coachHidden;
+  // Route-independent visibility: supported Chess.com pages use the same coach controls.
+  const active=()=>eligible()&&!document.hidden&&!coachHidden;
   const current=epoch=>active()&&epoch===generation;
 
   function show(message){
