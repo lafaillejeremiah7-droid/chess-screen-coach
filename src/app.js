@@ -218,6 +218,7 @@ async function readNow(resync=false) {
       status('Position tracked. Waiting for your side to move.');
     } else await recommend(currentFen);
   }catch(error){
+    captureInterrupted=true;
     ++requestNumber;
     display('Move — to —');
     status(error.message+' Use Read / resync board if moves were missed.');
