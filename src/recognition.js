@@ -1,3 +1,15 @@
+// Returns true only when nearly every sampled board pixel is very dark.
+// Avoid using dark board themes as a signal by requiring 98% near-black pixels.
+export function isBlackCapture(imageData, threshold=14, fraction=0.98){
+  const pixels=imageData?.data;
+  if(!pixels || pixels.length<4 || pixels.length%4!==0)return false;
+  let black=0,total=pixels.length/4;
+  for(let i=0;i<pixels.length;i+=4){
+    if(pixels[i]<threshold&&pixels[i+1]<threshold&&pixels[i+2]<threshold)black++;
+  }
+  return black/total>=fraction;
+}
+
 // The template matcher operates entirely on a Canvas image. It is tuned for the
 // standard green Chess.com board and the user's supplied piece theme.
 export const GLYPHS={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟','.':''};
