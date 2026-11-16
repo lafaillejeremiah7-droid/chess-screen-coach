@@ -1,10 +1,13 @@
-import {INITIAL, boardToFen, loadTemplates, readBoard} from './recognition.js';
+import {INITIAL, boardToFen, loadTemplates, readBoard, isBlackCapture} from './recognition.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('screen');
 const ctx = canvas.getContext('2d');
 const frame = document.createElement('canvas');
 const frameCtx = frame.getContext('2d', {willReadFrequently:true});
+const captureProbe=document.createElement('canvas');
+captureProbe.width=captureProbe.height=32;
+const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
 let previewTimer=null;
@@ -37,6 +40,13 @@ function setupSize(width,height) {
   frame.height=canvas.height=Math.max(1,Math.round(height*scale));
   crop=null;
   currentFen=null;
+}
+
+function captureIsBlack(){
+  if(!crop)return false;
+  captureProbeCtx.clearRect(0,0,32,32);
+  captureProbeCtx.drawImage(frame,crop.x,crop.y,crop.size,crop.size,0,0,32,32);
+  return isBlackCapture(captureProbeCtx.getImageData(0,0,32,32));
 }
 
 function redraw() {
@@ -171,6 +181,18 @@ async function readNow(resync=false) {
     if (!templates) throw Error('Board recognition templates are not ready.');
     if (!stream && !screenshot) throw Error('Share a screen or upload a screenshot.');
     redraw();
+    if(stream && (!video || video.readyState<2 || stream.getVideoTracks().some(t=>t.muted||t.readyState!=='live'))){
+      ++requestNumber;
+      display('Capture unavailable');
+      status('Screen capture is paused or ended. Check Chrome screen sharing, then resume.');
+      return;
+    }
+    if(captureIsBlack()){
+      ++requestNumber;
+      display('Board temporarily unavailable');
+      status('Captured chessboard is black. Waiting for a visible frame; no position update made.');
+      return;
+    }
     const orientation=$('orientation').value;
     const result=await readBoard(frame,crop,templates,orientation);
     if (result.lowConfidence>6)
