@@ -240,3 +240,21 @@ class AdaptiveTrainingTests(unittest.TestCase):
                 server.analyze_fen(chess.Board().fen())
         finally:
             server.coach_control(False)
+
+
+class PauseCancellationTests(unittest.TestCase):
+    def test_hiding_stops_active_engine_analysis(self):
+        class ActiveSearch:
+            def __init__(self):self.stops=0
+            def stop(self):self.stops+=1
+        active=ActiveSearch()
+        try:
+            with server.CONTROL_LOCK:
+                server.ACTIVE_ANALYSIS=active
+            result=server.coach_control(True)
+            self.assertTrue(result["hidden"])
+            self.assertEqual(active.stops,1)
+        finally:
+            with server.CONTROL_LOCK:
+                server.ACTIVE_ANALYSIS=None
+            server.coach_control(False)
