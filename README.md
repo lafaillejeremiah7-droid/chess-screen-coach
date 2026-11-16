@@ -7,7 +7,7 @@ classes from the visible Chess.com webpage, converts them to FEN, sends that
 text to your local Python server, and displays a single instruction at the
 top of the chess tab. No screenshots, video, or microphone permissions.
 
-**Page access (v0.4.0):** The extension can load on Chess.com pages, including
+**Page access (v0.4.1):** The extension can load on Chess.com pages, including
 pages with human games. It only analyzes boards whose piece elements match
 the existing Chess.com DOM reader, and it still needs the local Python server.
 Midgame recovery is automatic only when the board provides a matching full FEN; otherwise a fresh game or verified FEN resync is required.
@@ -56,7 +56,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.4.0**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.4.1**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
@@ -151,10 +151,13 @@ If Stockfish is installed in a nonstandard location:
 STOCKFISH_PATH=/absolute/path/to/stockfish python server.py
 ```
 
-### Board reliability scope (v0.4.0)
+### Board reliability scope (v0.4.1)
 - Reads classic Chess.com `square-52` piece classes and alternate `data-piece`, `data-square`, and algebraic `square-e4` markup.
 - Prefers the largest visible compatible board when a page contains multiple boards.
 - Rechecks temporary animation states and scans periodically for missed DOM updates without repeated Stockfish searches on an unchanged position.
 - Keeps legal-move history when a board is flipped; flipping the visual board does not reset the chess position.
 - Can resume from a midgame board when a matching complete FEN is provided as a board attribute. If no complete legal FEN or move history is exposed, the reader cannot safely infer side to move, castling or en-passant rights from pieces alone.
 - Not a universal OCR system: canvas/WebGL boards, unsupported sites, invisible boards, nonstandard chess variants, or altered chess-piece HTML may still require manual FEN or the legacy screenshot dashboard. No live Chess.com page or Chromebook-specific test has yet been performed.
+
+### Transient black or missing chessboards (v0.4.1)
+If Chess.com temporarily removes the board or replaces its DOM element during a redraw, the overlay says the board is unavailable instead of retaining a possibly stale move. It keeps the last verified FEN, then resumes when the replacement board matches the known position or can be legally tracked from it. If the site is truly black due to GPU/browser rendering or screen-sharing capture, the extension cannot repair Chrome's rendering; test without the legacy dashboard, reload the tab, and check ChromeOS graphics/memory. If the returned board is more than two half-moves beyond the last verified position, manual FEN resynchronization may still be needed.
