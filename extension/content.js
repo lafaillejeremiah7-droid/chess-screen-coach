@@ -11,8 +11,8 @@
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
 
   function eligible(){
-    return /^\/play\/computer(?:\/|$)/.test(location.pathname) ||
-      /^\/analysis(?:\/|$)/.test(location.pathname);
+    return location.protocol==="https:"&&
+      (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
   const active=()=>eligible()&&!document.hidden;
   const current=epoch=>active()&&epoch===generation;
@@ -91,7 +91,7 @@
       let snapshot;
       try{snapshot=reader.snapshot(document);}
       catch{show("Board updating; checking again.");return;}
-      if(!snapshot){show("Open a Chess.com bot or analysis board.");return;}
+      if(!snapshot){show("Open a Chess.com board to start tracking.");return;}
       if(snapshot.board!==currentBoard){
         currentBoard=snapshot.board;currentFen=null;lastPlacement=null;
         lastColor=snapshot.myColor;analysisPending=false;rejectedPosition=null;settledText=null;
@@ -107,7 +107,7 @@
       // A rejected board must change before another two-ply search is useful.
       if(positionKey===rejectedPosition)return;
       if(!currentFen&&placement!==reader.initial){
-        show("Start from a new bot game, or enter FEN in the analysis dashboard.");
+        show("Start from the initial position, or enter FEN in the analysis dashboard.");
         return;
       }
       if(!healthChecked){
