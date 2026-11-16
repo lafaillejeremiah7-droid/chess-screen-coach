@@ -24,6 +24,14 @@ If you are testing the feature branch, switch to `feature/stockfish19-baseline-a
 
 The installer selects the correct official Linux universal release for x86_64, aarch64 or riscv64, verifies the published SHA-256 digest, and checks the executable's UCI version **before** replacing an existing binary. It installs to `.stockfish/bin/stockfish`, which the Python server prefers over an older system package. `STOCKFISH_PATH` continues to override the path explicitly. The existing one-second default, thread limit and RAM-conscious 16 MiB hash remain unchanged.
 
+Verify **real installation and 1-second move calculation** on the Chromebook (from the repository folder after installing Python dependencies):
+
+```bash
+.venv/bin/python scripts/check_stockfish19_ready.py --install
+```
+
+The command installs or repairs the official checksum-verified release, confirms the running UCI engine reports Stockfish 19, configures one thread and a 16 MiB hash, runs a timed 1-second starting-position search, and prints a JSON result with `"ready": true` and a legal `"bestmove"` on success. It does not install or verify the Chrome extension. If your existing server is running, stop and restart it to pick up the newly installed engine. Server health: `http://127.0.0.1:8765/api/health` should include `"stockfish19": true`.
+
 Verify with:
 
 ```bash
