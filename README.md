@@ -7,10 +7,10 @@ classes from the visible Chess.com webpage, converts them to FEN, sends that
 text to your local Python server, and displays a single instruction at the
 top of the chess tab. No screenshots, video, or microphone permissions.
 
-**Page access (v0.3.1):** The extension can load on Chess.com pages, including
+**Page access (v0.4.0):** The extension can load on Chess.com pages, including
 pages with human games. It only analyzes boards whose piece elements match
 the existing Chess.com DOM reader, and it still needs the local Python server.
-Opening a position mid-game without a recorded move history is not supported.
+Midgame recovery is automatic only when the board provides a matching full FEN; otherwise a fresh game or verified FEN resync is required.
 Using engine suggestions during games against other people violates Chess.com's
 fair-play rules; this technical update does not change those rules.
 
@@ -37,8 +37,8 @@ To hide it, turn off the extension in `chrome://extensions`.
 The extension reads the board after its pieces change, allowing 180 ms for
 animations to settle. An unchanged board causes no repeated board reads or
 Python requests. Hidden tabs pause their timers and board observer, and resume
-when you return. A lightweight check every two seconds finds newly mounted
-boards. The Python backend tracks up to two legal half-moves between readings.
+when you return. A lightweight check every four seconds retries after missed mutations and finds newly mounted
+boards. Temporary incomplete boards are rechecked, and the largest visible compatible board is preferred. The Python backend tracks up to two legal half-moves between readings.
 
 Stockfish uses **one thread, a 16 MiB hash, and a 0.2-second search budget**, with
 no background pondering. The hash is only part of its total memory use.
@@ -56,7 +56,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.3.1**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.4.0**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
@@ -65,7 +65,7 @@ in progress, the initial turn/castling status is not knowable from pieces
 alone; use the manual FEN feature on the existing dashboard or restart a bot
 game. If more than two half-moves happen between checks or Chess.com changes
 its page structure, tracking stops rather than showing an unverified move.
-The extension only reads these supported webpages, **not** your Chromebook
+The extension reads Chess.com DOM boards and compatible piece/data-square markup, **not** your Chromebook
 desktop or other applications. It has not been tested on your particular
 Chromebook.
 
@@ -150,3 +150,11 @@ If Stockfish is installed in a nonstandard location:
 ```bash
 STOCKFISH_PATH=/absolute/path/to/stockfish python server.py
 ```
+
+### Board reliability scope (v0.4.0)
+- Reads classic Chess.com `square-52` piece classes and alternate `data-piece`, `data-square`, and algebraic `square-e4` markup.
+- Prefers the largest visible compatible board when a page contains multiple boards.
+- Rechecks temporary animation states and scans periodically for missed DOM updates without repeated Stockfish searches on an unchanged position.
+- Keeps legal-move history when a board is flipped; flipping the visual board does not reset the chess position.
+- Can resume from a midgame board when a matching complete FEN is provided as a board attribute. If no complete legal FEN or move history is exposed, the reader cannot safely infer side to move, castling or en-passant rights from pieces alone.
+- Not a universal OCR system: canvas/WebGL boards, unsupported sites, invisible boards, nonstandard chess variants, or altered chess-piece HTML may still require manual FEN or the legacy screenshot dashboard. No live Chess.com page or Chromebook-specific test has yet been performed.
