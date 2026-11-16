@@ -19,16 +19,6 @@
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
-  chrome.storage?.local?.get?.(settings,applySettings);
-  chrome.storage?.onChanged?.addListener?.((changes,area)=>{
-    if(area==="local"){
-      const next={...settings};
-      for(const key of Object.keys(settings)){
-        if(changes[key])next[key]=changes[key].newValue;
-      }
-      applySettings(next);
-    }
-  });
   function playerColor(snapshot){
     if(settings.playerSide!=="auto")return settings.playerSide;
     if(snapshot.playerColor==="w"||snapshot.playerColor==="b")return snapshot.playerColor;
@@ -237,4 +227,14 @@
   window.addEventListener("pagehide",stopWatching);
   window.addEventListener("pageshow",resume);
   resume();
+  chrome.storage?.local?.get?.(settings,applySettings);
+  chrome.storage?.onChanged?.addListener?.((changes,area)=>{
+    if(area==="local"){
+      const next={...settings};
+      for(const key of Object.keys(settings)){
+        if(changes[key])next[key]=changes[key].newValue;
+      }
+      applySettings(next);
+    }
+  });
 })();
