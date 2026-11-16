@@ -38,8 +38,7 @@ test('Stockfish bridge authorizes Chess.com game URLs but no other hosts',async(
   ]){
     assert.equal(listener({action:'health'},{url},()=>{}),false);
   }
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise(resolve=>setTimeout(resolve,0));
   assert.equal(responses.length,3);
   assert.ok(responses.every(r=>r.ok&&r.stockfish));
 });
