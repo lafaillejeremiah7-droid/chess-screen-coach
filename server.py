@@ -21,7 +21,8 @@ import chess.engine
 ROOT = Path(__file__).resolve().parent
 ENGINE_LOCK = threading.Lock()
 ENGINE: chess.engine.SimpleEngine | None = None
-ANALYSIS_SECONDS = 0.2
+ANALYSIS_SECONDS = 1.0
+ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
 MAX_BODY = 2048
@@ -57,7 +58,37 @@ def format_instruction(board: chess.Board, move: chess.Move) -> str:
     return text
 
 
-def analyze_fen(fen: str) -> dict:
+
+def describe_move(board: chess.Board, move: chess.Move) -> str:
+    """Describe observable move features without inventing chess strategy."""
+    if board.is_castling(move):
+        return "Castles the king."
+    captured = board.piece_at(move.to_square)
+    capture = board.is_capture(move)
+    next_board = board.copy(stack=False)
+    next_board.push(move)
+    if next_board.is_checkmate():
+        return "Delivers checkmate."
+    if move.promotion:
+        return f"Promotes a pawn to {PIECE_NAMES[move.promotion]}."
+    if next_board.is_check():
+        return "Gives check."
+    if capture:
+        captured_name = PIECE_NAMES[captured.piece_type] if captured else "pawn"
+        return f"Captures a {captured_name}."
+    return "Stockfish's preferred move at the current search budget."
+
+
+def search_seconds(value: float | None) -> float:
+    if value is None:
+        return ANALYSIS_SECONDS
+    if type(value) not in (int, float) or float(value) not in ALLOWED_ANALYSIS_SECONDS:
+        raise ValueError("Analysis seconds must be 0.2, 0.5, 1 or 2.")
+    return float(value)
+
+
+def analyze_fen(fen: str, seconds: float | None = None) -> dict:
+    seconds = search_seconds(seconds)
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
     try:
@@ -67,26 +98,36 @@ def analyze_fen(fen: str) -> dict:
     if not board.is_valid():
         raise ValueError("Invalid board position; check the recognized pieces and side to move")
     if board.is_game_over():
-        return {"instruction": "Game over", "from": None, "to": None, "fen": board.fen()}
+        return {"instruction": "Game over", "from": None, "to": None, "fen": board.fen(), "seconds": seconds, "reason": "Game finished."}
     if ENGINE is None:
         raise RuntimeError("Stockfish is unavailable. Install stockfish and restart Python server.")
     # Do not accumulate searches from multiple tabs on a small Chromebook.
     if not ENGINE_LOCK.acquire(blocking=False):
         raise RuntimeError("Engine busy. Keep one coach tab open and try again.")
     try:
-        key = board.fen()
+        key = (board.fen(), seconds)
         if key in ANALYSIS_CACHE:
             ANALYSIS_CACHE.move_to_end(key)
             return dict(ANALYSIS_CACHE[key])
-        result = ENGINE.play(board, chess.engine.Limit(time=ANALYSIS_SECONDS), ponder=False)
+        result = ENGINE.play(board, chess.engine.Limit(time=seconds), ponder=False,
+                             info=chess.engine.INFO_ALL)
         move = result.move
         if move is None:
             raise RuntimeError("Stockfish did not return a legal move")
+        info = result.info or {}
+        score = info.get("score")
+        pov_score = score.pov(board.turn) if score is not None else None
         answer = {
             "instruction": format_instruction(board, move),
             "from": chess.square_name(move.from_square),
             "to": chess.square_name(move.to_square),
-            "fen": key,
+            "fen": board.fen(),
+            "seconds": seconds,
+            "reason": describe_move(board, move),
+            "depth": info.get("depth") if isinstance(info.get("depth"), int) else None,
+            "nodes": info.get("nodes") if isinstance(info.get("nodes"), int) else None,
+            "score_cp": pov_score.score() if pov_score is not None else None,
+            "mate_in": pov_score.mate() if pov_score is not None else None,
         }
         ANALYSIS_CACHE[key] = answer
         if len(ANALYSIS_CACHE) > MAX_CACHED_POSITIONS:
@@ -176,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
             if endpoint == "/api/track":
                 result = advance_position(data.get("previous"), data.get("placement"))
             else:
-                result = analyze_fen(data.get("fen"))
+                result = analyze_fen(data.get("fen"), data.get("seconds"))
             self.respond_json(200, result)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.respond_json(400, {"error": str(exc)})
@@ -186,7 +227,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = unquote(urlparse(self.path).path)
         if path == "/api/health":
-            return self.respond_json(200, {"python": True, "stockfish": ENGINE is not None})
+            return self.respond_json(200, {"python": True, "stockfish": ENGINE is not None,
+                                           "engine": ENGINE.id.get("name") if ENGINE is not None else None,
+                                           "times": ALLOWED_ANALYSIS_SECONDS})
         if path == "/":
             path = "/index.html"
         if path == "/templates/pieces.json":
@@ -219,7 +262,7 @@ def main() -> None:
     try:
         ENGINE = chess.engine.SimpleEngine.popen_uci(stockfish_location())
         ENGINE.configure({"Threads": 1, "Hash": 16})
-        print("Stockfish ready: 1 thread, 16 MiB hash, 0.2-second searches; no pondering.")
+        print("Stockfish ready: 1 thread, 16 MiB hash, selectable 0.2-2s searches; no pondering.")
     except Exception as exc:
         if ENGINE is not None:
             ENGINE.close()

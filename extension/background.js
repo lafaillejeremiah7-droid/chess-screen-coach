@@ -13,13 +13,14 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   const path=message.action==="track"?"/api/track":message.action==="health"?"/api/health":"/api/analyze";
   const body=message.action==="track"
     ?{previous:message.previous,placement:message.placement}
-    :{fen:message.fen};
+    :{fen:message.fen,seconds:message.seconds};
   // Never accept URL inputs, cookies, credentials or screenshots.
   const valid=message.action==="health"||
     (message.action==="track"?
       typeof body.previous==="string"&&body.previous.length<=120&&
       typeof body.placement==="string"&&body.placement.length<=90:
-      typeof body.fen==="string"&&body.fen.length<=120);
+      typeof body.fen==="string"&&body.fen.length<=120&&
+      (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds)));
   if(!valid){sendResponse({ok:false,error:"Invalid chess position"});return false;}
   (async()=>{
     const controller=new AbortController();

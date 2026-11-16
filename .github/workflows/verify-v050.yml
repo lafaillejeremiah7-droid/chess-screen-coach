@@ -1,0 +1,43 @@
+name: Verify v0.5.0 candidate
+
+on:
+  push:
+    branches: [feature/v0.5.0-analysis-quality]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm test
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_*.py'
+      - run: node --check extension/content.js
+      - run: node --check extension/background.js
+      - run: node --check extension/board.js
+      - run: node --check extension/options.js
+      - run: python -m compileall -q server.py scripts/benchmark_move_quality.py
+  benchmark:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Run 110-position move quality audit (0.2s vs 0.9s)
+        run: python scripts/benchmark_move_quality.py --samples 110 --reference-seconds 0.9 --output move_quality_report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v050-move-quality-report
+          path: move_quality_report.json

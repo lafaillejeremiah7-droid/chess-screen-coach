@@ -106,6 +106,15 @@
       classes?.contains?.("orientation-black")||classes?.contains?.("board-flipped")?"b":"w";
   }
 
+  function declaredPlayerColor(board){
+    for(const name of ["data-player-color","data-player-side","data-user-color"]){
+      const declared=(board.getAttribute?.(name)||"").toLowerCase();
+      if(declared==="white"||declared==="w")return "w";
+      if(declared==="black"||declared==="b")return "b";
+    }
+    return null;
+  }
+
   function snapshot(doc){
     const board=findBoard(doc);
     if(!board)return null;
@@ -115,7 +124,7 @@
     const candidate=board.getAttribute?.("data-fen")||board.getAttribute?.("fen")||"";
     const parts=candidate.trim().split(/\s+/);
     const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?candidate.trim():null;
-    return {board,placement,bottomColor,myColor:bottomColor,fen};
+    return {board,placement,bottomColor,myColor:bottomColor,playerColor:declaredPlayerColor(board),fen};
   }
 
   root.ChessCoachBoard={placementFromClasses,placementFromNodes,findBoard,snapshot,initial};
