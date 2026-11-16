@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Study Coach — No Screen Share",
-  "version": "0.3.1",
-  "description": "Read positions on Chess.com boards and send FEN to local Python Stockfish. No screen recording.",
+  "version": "0.4.0",
+  "description": "Read more Chess.com board layouts with recovery checks and send FEN to local Python Stockfish.",
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*"
