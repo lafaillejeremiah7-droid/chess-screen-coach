@@ -19,13 +19,20 @@ jobs:
         with:
           python-version: '3.12'
       - name: Run browser and extension unit tests
-        run: npm test
+        run: |
+          node --check extension/content.js
+          node --check extension/background.js
+          node --check src/app.js
+          node --check src/training.js
+          npm test
       - name: Install Python chess dependency
         run: pip install -r requirements.txt
       - name: Run Python chess and API unit tests
         run: python -m unittest discover -s tests -p 'test_*.py'
-      - name: Install actual Stockfish binary
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Install checksum-verified Stockfish 19
+        run: python scripts/install_stockfish19.py
+      - name: Verify Stockfish 19 identity and legal one-second move
+        run: python scripts/check_stockfish19_ready.py
       - name: Verify real engine and localhost HTTP API
         run: |
           python - <<'PY'
