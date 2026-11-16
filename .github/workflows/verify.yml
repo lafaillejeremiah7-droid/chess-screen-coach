@@ -88,3 +88,11 @@ jobs:
               server.ENGINE.quit()
               server.ENGINE = None
           PY
+      - name: Empirical 1400-Elo strength audit at 1 second per move
+        run: python scripts/audit_main_1400.py --positions 24 --seconds 1 --output main_1400_strength_audit.json
+      - name: Save strength-audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-1400-strength-audit
+          path: main_1400_strength_audit.json
+          if-no-files-found: error
