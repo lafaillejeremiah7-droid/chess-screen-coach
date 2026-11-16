@@ -1,5 +1,7 @@
 # Python Chess Screen Coach
 
+**Stockfish 19 upgrade (experimental branch):** [Installation, verification and A/B engine testing](docs/stockfish19.md). The pinned Stockfish 19 binary is installed locally; GitHub updates alone do not install software on your Chromebook. Existing one-second settings stay unchanged.
+
 > **v0.5.0 release.** Default analysis time is **1 second**. The
 > Python server, Chrome extension, and extension settings agree on this default.
 > Existing user-selected times remain in effect until changed manually.

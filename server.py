@@ -35,13 +35,21 @@ PIECE_NAMES = {
 def stockfish_location() -> str:
     """Find local Stockfish; on Debian/ChromeOS it commonly lives in /usr/games."""
     explicit = os.getenv("STOCKFISH_PATH")
-    candidates = [explicit] if explicit else []
-    candidates += [shutil.which("stockfish"), "/usr/games/stockfish", "/usr/bin/stockfish"]
+    if explicit:
+        if Path(explicit).is_file() and os.access(explicit, os.X_OK):
+            return explicit
+        raise FileNotFoundError(f"STOCKFISH_PATH does not point to an executable: {explicit}")
+    candidates = [
+        ROOT / ".stockfish" / "bin" / "stockfish",
+        shutil.which("stockfish"),
+        "/usr/games/stockfish",
+        "/usr/bin/stockfish",
+    ]
     for candidate in candidates:
         if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
     raise FileNotFoundError(
-        "Stockfish not installed. On Chromebook Linux run: sudo apt install stockfish"
+        "No Stockfish found. Run: python3 scripts/install_stockfish19.py"
     )
 
 
