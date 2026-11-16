@@ -47,7 +47,7 @@ jobs:
           import server
 
           server.ENGINE = chess.engine.SimpleEngine.popen_uci(server.stockfish_location())
-          server.ENGINE.configure({"Threads": 1, "Hash": 16})
+          server.configure_main_engine(server.ENGINE)
           http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
           thread = threading.Thread(target=http.serve_forever, daemon=True)
           thread.start()
@@ -64,6 +64,7 @@ jobs:
           try:
               status, health = request("/api/health")
               assert status == 200 and health["python"] and health["stockfish"]
+              assert health["default_elo"] == 1400 and health["strength_limited"]
               board = chess.Board()
               status, answer = request("/api/analyze", {"fen": board.fen()})
               move = chess.Move.from_uci(answer["from"] + answer["to"])
