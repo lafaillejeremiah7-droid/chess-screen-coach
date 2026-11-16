@@ -9,6 +9,44 @@
   let lastText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
+  let lockedPlayerColor=null;
+  const settings={playerSide:"auto",thinkSeconds:0.2,showDetails:false};
+  function applySettings(values){
+    if(!values)return;
+    settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
+    settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:0.2;
+    settings.showDetails=values.showDetails===true;
+    analysisPending=true;settledText=null;retryAt=0;
+    schedule(0);
+  }
+  chrome.storage?.local?.get?.(settings,applySettings);
+  chrome.storage?.onChanged?.addListener?.((changes,area)=>{
+    if(area==="local"){
+      const next={...settings};
+      for(const key of Object.keys(settings)){
+        if(changes[key])next[key]=changes[key].newValue;
+      }
+      applySettings(next);
+    }
+  });
+  function playerColor(snapshot){
+    if(settings.playerSide!=="auto")return settings.playerSide;
+    if(snapshot.playerColor==="w"||snapshot.playerColor==="b")return snapshot.playerColor;
+    // Orientation is only an initial fallback, never re-infer after a flip.
+    if(!lockedPlayerColor)lockedPlayerColor=snapshot.bottomColor||snapshot.myColor||null;
+    return lockedPlayerColor;
+  }
+  function displayInstruction(answer){
+    if(!settings.showDetails||
+       !/^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname))
+      return answer.instruction;
+    const parts=[answer.instruction];
+    if(answer.reason)parts.push(answer.reason);
+    if(Number.isInteger(answer.depth))parts.push("Depth "+answer.depth);
+    if(Number.isInteger(answer.mate_in))parts.push("Mate in "+answer.mate_in+" (side to move)");
+    else if(typeof answer.score_cp==="number")parts.push("Eval "+(answer.score_cp/100).toFixed(2)+" (side to move)");
+    return parts.join(" | ");
+  }
 
   function eligible(){
     return location.protocol==="https:"&&
@@ -35,7 +73,7 @@
     observer?.disconnect();observer=null;
     currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
     healthChecked=false;analysisPending=false;rejectedPosition=null;retryAt=0;
-    lastText="";settledText=null;badSnapshots=0;
+    lastText="";settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
 
@@ -78,6 +116,7 @@
     let latest=null;
     try{latest=reader.snapshot(document);}catch{}
     return latest&&latest.board===snapshot.board&&latest.placement===snapshot.placement&&
+      latest.bottomColor===snapshot.bottomColor&&latest.playerColor===snapshot.playerColor&&
       latest.myColor===snapshot.myColor;
   }
 
@@ -151,14 +190,20 @@
       }
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       currentFen=nextFen;lastPlacement=placement;rejectedPosition=null;
-      analysisPending=currentFen.split(" ")[1]===snapshot.myColor;
+      const side=playerColor(snapshot);
+      if(!side){
+        analysisPending=false;
+        show("Select your color in Chess Screen Coach settings.");
+        return;
+      }
+      analysisPending=currentFen.split(" ")[1]===side;
       if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
       show("Analyzing…");
-      const answer=await request("analyze",{fen:currentFen});
+      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
       analysisPending=false;retryAt=0;
-      settledText=answer.instruction;show(settledText);
+      settledText=displayInstruction(answer);show(settledText);
     }finally{
       processing=false;
       if(dirty){dirty=false;schedule();}
