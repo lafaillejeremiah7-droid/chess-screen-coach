@@ -35,7 +35,7 @@ function harness(respond,pathname='/play/computer'){
       observe(board){this.board=board;}
       disconnect(){this.board=null;}
     },
-    ChessCoachBoard:{initial,snapshot(){reads++;if(state.invalid)throw Error('Animating');return {...state};}},
+    ChessCoachBoard:{initial,snapshot(){reads++;if(state.invalid)throw Error('Animating');if(state.missing)return null;return {...state};}},
     chrome:{runtime:{sendMessage(message,callback){
       requests.push(message);
       let response=respond?.(message,requests);
@@ -69,12 +69,12 @@ function harness(respond,pathname='/play/computer'){
   };
 }
 
-test('unchanged boards do not cause repeated reads or engine requests',async()=>{
+test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
   const reads=h.reads,count=h.requests.length;
   await h.advance(60000);
-  assert.equal(h.reads,reads);
+  assert.ok(h.reads>reads&&h.reads<reads+20);
   assert.equal(h.requests.length,count);
 });
 
@@ -188,5 +188,41 @@ test('returning to the last verified position clears a tracking error',async()=>
   await h.advance(0);h.state.placement=e4;h.mutate();await h.advance(200);
   assert.match(h.text,/tracking lost/);
   h.state.placement=initial;h.mutate();await h.advance(200);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('a verified FEN attribute allows automatic mid-position recovery',async()=>{
+  const h=harness();
+  h.state.placement=e4;
+  h.state.fen=e4+' b KQkq - 0 1';
+  h.state.myColor='b';
+  await h.advance(0);
+  assert.equal(h.requests.at(-1).action,'analyze');
+  assert.equal(h.requests.at(-1).fen,h.state.fen);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+test('flipping an existing board keeps position history',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.state.placement=e4;h.mutate();await h.advance(200);
+  assert.equal(h.text,'Waiting for opponent');
+  h.state.myColor='b';h.mutate();await h.advance(200);
+  assert.equal(h.requests.at(-1).action,'analyze');
+  assert.equal(h.requests.at(-1).fen,e4+' b KQkq - 0 1');
+});
+test('transient malformed board recovers without another mutation event',async()=>{
+  const h=harness();await h.advance(0);
+  h.state.invalid=true;h.mutate();await h.advance(200);
+  assert.match(h.text,/Board updating/);
+  h.state.invalid=false;
+  await h.advance(450);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+test('overlay is removed when no board is present',async()=>{
+  const h=harness();await h.advance(0);
+  h.state.missing=true;h.mutate();await h.advance(200);
+  assert.equal(h.text,undefined);
+  h.state.missing=false;
+  await h.advance(4000);
   assert.equal(h.text,'Move pawn from e2 to e4');
 });
