@@ -26,6 +26,9 @@ CONTROL_LOCK = threading.Lock()
 COACH_HIDDEN = False
 ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
+# Permanent default for move recommendations from the extension/dashboard.
+# UCI_Elo is approximate and not equivalent to any online rating.
+MAIN_COACH_ELO = 1400
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
@@ -93,7 +96,7 @@ def describe_move(board: chess.Board, move: chess.Move) -> str:
     if capture:
         captured_name = PIECE_NAMES[captured.piece_type] if captured else "pawn"
         return f"Captures a {captured_name}."
-    return "Stockfish's preferred move at the current search budget."
+    return "Stockfish's strength-limited choice at the current search budget."
 
 
 def search_seconds(value: float | None) -> float:
@@ -102,6 +105,16 @@ def search_seconds(value: float | None) -> float:
     if type(value) not in (int, float) or float(value) not in ALLOWED_ANALYSIS_SECONDS:
         raise ValueError("Analysis seconds must be 0.2, 0.5, 1 or 2.")
     return float(value)
+
+
+def configure_main_engine(engine) -> None:
+    """Give the *main* recommendation bot a permanent ~1400 UCI-Elo target.
+
+    Stockfish chooses the weakened move in its final UCI bestmove. Reading
+    only the top analysis PV bypasses the limit.
+    """
+    engine.configure({"Threads": 1, "Hash": 16,
+                      "UCI_LimitStrength": True, "UCI_Elo": MAIN_COACH_ELO})
 
 
 def coach_control(hidden: bool | None = None) -> dict:
@@ -138,7 +151,12 @@ def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
         with analysis:
             for _ in analysis:
                 pass
+            # The top PV is NOT necessarily the strength-limited choice.
+            # Waiting for UCI bestmove preserves Stockfish's deliberate
+            # suboptimal selection and the existing H-key cancellation path.
+            selected = analysis.wait()
             result = dict(analysis.info)
+            result["selected_move"] = selected.move
     finally:
         with CONTROL_LOCK:
             if ACTIVE_ANALYSIS is analysis:
@@ -176,8 +194,9 @@ def analyze_fen(fen: str, seconds: float | None = None) -> dict:
             ANALYSIS_CACHE.move_to_end(key)
             return dict(ANALYSIS_CACHE[key])
         info = engine_info(board, seconds)
-        pv = info.get("pv") or []
-        move = pv[0] if pv else None
+        # Use the actual UCI bestmove selected under UCI_LimitStrength,
+        # never the full-strength top principal variation.
+        move = info.get("selected_move")
         if move is None:
             raise RuntimeError("Stockfish did not return a legal move")
         score = info.get("score")
@@ -342,6 +361,8 @@ class Handler(BaseHTTPRequestHandler):
                                            "stockfish19": ENGINE is not None and is_stockfish19_name(ENGINE.id.get("name")),
                                            "engine": ENGINE.id.get("name") if ENGINE is not None else None,
                                            "default_seconds": ANALYSIS_SECONDS,
+                                           "default_elo": MAIN_COACH_ELO,
+                                           "strength_limited": ENGINE is not None,
                                            "times": ALLOWED_ANALYSIS_SECONDS})
         if path == "/":
             path = "/index.html"
@@ -381,8 +402,9 @@ def main() -> None:
                 f"Expected Stockfish 19, found {name!r} at {engine_path}. "
                 "Run: python3 scripts/install_stockfish19.py"
             )
-        ENGINE.configure({"Threads": 1, "Hash": 16})
-        print(f"Stockfish 19 ready: {engine_path}; 1 thread, 16 MiB hash; default 1-second analysis.")
+        configure_main_engine(ENGINE)
+        print(f"Stockfish 19 ready: {engine_path}; 1 thread, 16 MiB hash; "
+              f"main coach targets {MAIN_COACH_ELO} UCI Elo; default 1-second search.")
     except Exception as exc:
         if ENGINE is not None:
             ENGINE.close()

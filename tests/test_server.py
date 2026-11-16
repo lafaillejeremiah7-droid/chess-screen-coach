@@ -8,14 +8,16 @@ import server
 from server import format_instruction, advance_position
 
 class FakeAnalysis:
-    def __init__(self, move, info=None):
+    def __init__(self, move, info=None, selected=None):
         self.info={"pv":[move],**(info or {})}
+        self.selected=selected if selected is not None else move
         self.stopped=False
     def __enter__(self):return self
     def __exit__(self,*args):return False
     def __iter__(self):
         yield self.info
     def stop(self):self.stopped=True
+    def wait(self):return chess.engine.BestMove(self.selected,None)
 
 
 class ChessCoachTests(unittest.TestCase):
@@ -110,6 +112,15 @@ class AnalysisWorkloadTests(unittest.TestCase):
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
             self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.analysis.call_count, 3)
+
+    def test_main_coach_recommends_weaker_selected_move_not_top_pv(self):
+        top=chess.Move.from_uci("g1f3")
+        weaker=chess.Move.from_uci("a2a3")
+        self.engine.analysis.side_effect=lambda board,*args,**kwargs:FakeAnalysis(top,selected=weaker)
+        answer=server.analyze_fen(chess.Board().fen())
+        self.assertEqual(answer["from"],"a2")
+        self.assertEqual(answer["to"],"a3")
+        self.assertEqual(answer["instruction"],"Move pawn from a2 to a3")
 
     def test_busy_engine_does_not_queue_more_searches(self):
         with server.ENGINE_LOCK:
@@ -306,3 +317,14 @@ class SparringTests(unittest.TestCase):
             play_practice_turn(chess.Board().fen(),"e2e4",2000,
                                engine_path="unused",engine_factory=lambda _:fake)
         fake.quit.assert_called_once()
+
+
+class MainCoachStrengthTests(unittest.TestCase):
+    def test_main_engine_strength_default_is_permanent_1400(self):
+        self.assertEqual(server.MAIN_COACH_ELO, 1400)
+        fake=Mock()
+        server.configure_main_engine(fake)
+        fake.configure.assert_called_once_with({
+            "Threads": 1, "Hash": 16,
+            "UCI_LimitStrength": True, "UCI_Elo": 1400
+        })

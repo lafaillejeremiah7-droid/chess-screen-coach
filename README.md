@@ -1,3 +1,5 @@
+> **v0.6.3 main agent default:** The Chrome extension and legacy screenshot dashboard now use **Stockfish 19 with `UCI_LimitStrength=true` and `UCI_Elo=1400`**, configured every time the Python server starts. Importantly, the main bot reads the engine's actual strength-limited UCI `bestmove`, not the stronger top analysis PV. Search time stays **1 second**. This is an approximate UCI engine-strength target, not a Chess.com rating. The separate sparring opponent retains its independently adjustable Elo, and the adaptive practice scorer continues to evaluate the PV. This is not a way to avoid detection or fair-play enforcement.
+
 > **v0.6.2 local sparring:** Open **http://127.0.0.1:8765/sparring.html** to play White against a dedicated Stockfish 19 opponent playing Black. Select a target UCI Elo (1400–3000) and enter moves using the on-page board or UCI notation. The opponent runs in a separate short-lived engine process with `UCI_LimitStrength=true`, so the main analysis engine remains unaffected. No online games are joined or controlled. The numeric Elo target is approximate and does not equal a Chess.com rating.
 
 > **v0.6.1:** The **H** key now hides the Chrome extension overlay and pauses its analysis, and also controls the older dashboard's floating move window through the Python server. Move overlays are compact. If the board advances by more than two half-moves while paused, the extension can recover from a *complete, validated* SAN move history or a matching FEN attribute; without one it stops safely and requests resynchronization. 
@@ -95,7 +97,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.1**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.6.3**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
