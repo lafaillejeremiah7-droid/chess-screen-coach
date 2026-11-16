@@ -271,14 +271,24 @@
 
   // A dashboard-side H key can also change the shared server control.
   // This lightweight sync does not read the board or request analysis.
-  setInterval(async()=>{
-    if(!eligible()||Date.now()-lastToggleAt<2200)return;
+  let controlTimer=null;
+  const syncVisibility=async()=>{
+    if(document.hidden||!eligible()||Date.now()-lastToggleAt<2200)return;
     const control=await request("control");
+    if(document.hidden)return;
     if(control?.ok&&typeof control.hidden==="boolean"&&control.hidden!==coachHidden){
       setCoachHidden(control.hidden);
       chrome.storage?.local?.set?.({coachHidden:control.hidden});
     }
-  },2000);
+  };
+  const refreshControlWatcher=()=>{
+    clearInterval(controlTimer);controlTimer=null;
+    if(!document.hidden)controlTimer=setInterval(()=>{void syncVisibility();},2000);
+  };
+  document.addEventListener("visibilitychange",refreshControlWatcher);
+  window.addEventListener("pagehide",()=>{clearInterval(controlTimer);controlTimer=null;});
+  window.addEventListener("pageshow",refreshControlWatcher);
+  refreshControlWatcher();
   document.addEventListener("keydown",handleHotkey,true);
   document.addEventListener("visibilitychange",resume);
   window.addEventListener("pagehide",stopWatching);
