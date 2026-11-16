@@ -2,3 +2,9 @@ node_modules/
 dist/
 public/engine/
 .DS_Store
+__pycache__/
+*.pyc
+.campaign-engine/
+campaign/
+checkpoint-download/
+checkpoint-upload/
