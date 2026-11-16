@@ -7,10 +7,12 @@ classes from the visible Chess.com webpage, converts them to FEN, sends that
 text to your local Python server, and displays a single instruction at the
 top of the chess tab. No screenshots, video, or microphone permissions.
 
-**Supported pages:** `https://www.chess.com/play/computer` (computer/bot games)
-and `https://www.chess.com/analysis` (personal/post-game analysis).
-The extension is not injected into Chess.com's live human games. Using engine
-suggestions during games against other people violates fair-play rules.
+**Page access (v0.3.1):** The extension can load on Chess.com pages, including
+pages with human games. It only analyzes boards whose piece elements match
+the existing Chess.com DOM reader, and it still needs the local Python server.
+Opening a position mid-game without a recorded move history is not supported.
+Using engine suggestions during games against other people violates Chess.com's
+fair-play rules; this technical update does not change those rules.
 
 ### Install the Chrome extension
 
@@ -29,7 +31,7 @@ suggestions during games against other people violates fair-play rules.
    and shows `Move [piece] from [square] to [square]` on your turn.
 
 You **do not** need to open the old dashboard or click Share Screen.
-The overlay appears only on allowed pages, without a screen-sharing prompt.
+The overlay appears where the reader detects a supported board, without a screen-sharing prompt.
 To hide it, turn off the extension in `chrome://extensions`.
 
 The extension reads the board after its pieces change, allowing 180 ms for
@@ -54,7 +56,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.3.0**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.3.1**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
