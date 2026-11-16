@@ -1,0 +1,38 @@
+name: Experimental Stockfish 19 check-aware LMR
+
+on:
+  push:
+    branches: [experiment/sf19-check-aware-lmr]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python chess library
+        run: python -m pip install -r requirements.txt
+      - name: Verify script syntax
+        run: python -m py_compile scripts/build_sf19_check_lmr.py scripts/compare_engines.py
+      - name: Build identical-source baseline and patched Stockfish 19 candidate
+        run: python scripts/build_sf19_check_lmr.py --jobs 2
+      - name: Small paired-opening smoke match (not strength evidence)
+        run: |
+          python scripts/compare_engines.py \
+            --baseline .stockfish/research/stockfish19-baseline \
+            --candidate .stockfish/research/stockfish19-check-lmr \
+            --games 4 --seconds 0.2 --max-plies 160 \
+            --output check_lmr_smoke_report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sf19-check-lmr-experiment-smoke
+          path: |
+            check_lmr_smoke_report.json
+            .stockfish/research/build_metadata.json
