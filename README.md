@@ -2,7 +2,7 @@
 
 **Stockfish 19 upgrade (experimental branch):** [Installation, verification and A/B engine testing](docs/stockfish19.md). The pinned Stockfish 19 binary is installed locally; GitHub updates alone do not install software on your Chromebook. Existing one-second settings stay unchanged.
 
-> **v0.5.0 release.** Default analysis time is **1 second**. The
+> **v0.5.1 extension controls.** Press **H** on a Chess.com tab to hide or resume the entire coach. Hiding removes the overlay and stops board monitoring and new engine requests until resumed. The hidden state is saved across tabs and reloads. The move display is smaller. Default analysis time remains **1 second**. The
 > Python server, Chrome extension, and extension settings agree on this default.
 > Existing user-selected times remain in effect until changed manually.
 > The app still uses locally installed Stockfish. Chromebook performance and
@@ -63,7 +63,7 @@ fair-play rules; this technical update does not change those rules.
 
 You **do not** need to open the old dashboard or click Share Screen.
 The overlay appears where the reader detects a supported board, without a screen-sharing prompt.
-To hide it, turn off the extension in `chrome://extensions`.
+Press **H** while the Chess.com tab is focused to hide the whole coach; press **H** again to resume. The hotkey is ignored while typing in a text field. The separate Python server remains running, but the hidden extension sends no new engine requests. To terminate the server, stop its terminal process.
 
 The extension reads the board after its pieces change, allowing 180 ms for
 animations to settle. An unchanged board causes no repeated board reads or
@@ -87,7 +87,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.5.0**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.5.1**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 

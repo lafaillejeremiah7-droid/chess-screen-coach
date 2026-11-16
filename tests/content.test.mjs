@@ -61,6 +61,7 @@ function harness(respond,pathname='/play/computer',options=null){
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
     visibility(hidden){document.hidden=hidden;events.get('visibilitychange')();},
+    key(key,overrides={}){events.get('keydown')?.({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
     async advance(ms){
       const end=now+ms;
       for(let step=0;step<10000;step++){
@@ -287,4 +288,54 @@ test('replaced board on the same turn reanalyzes verified position',async()=>{
   await h.advance(4000);
   assert.equal(h.text,'Move pawn from e2 to e4');
   assert.ok(h.requests.filter(x=>x.action==='analyze').length>first);
+});
+
+test('H hides the entire coach and pauses observation and engine requests until restored',async()=>{
+  const h=harness();await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+  const count=h.requests.length,reads=h.reads;
+  h.key('h');
+  assert.equal(h.text,undefined);
+  assert.equal(h.timerCount,0);
+  h.state.placement=e4;h.mutate();await h.advance(12000);
+  assert.equal(h.requests.length,count);
+  assert.equal(h.reads,reads);
+  h.key('H');
+  await h.advance(0);
+  assert.equal(h.requests.at(-1).action,'track');
+  assert.equal(h.text,'Waiting for opponent');
+});
+
+test('H is ignored while typing, with modifiers, or during key auto-repeat',async()=>{
+  const h=harness();await h.advance(0);
+  for(const opts of [
+    {repeat:true},{ctrlKey:true},{altKey:true},{metaKey:true},{isComposing:true},
+    {target:{tagName:'INPUT'}},{target:{tagName:'TEXTAREA'}},
+    {target:{tagName:'DIV',isContentEditable:true}}
+  ])h.key('h',opts);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+  h.key('h');
+  assert.equal(h.text,undefined);
+});
+
+test('a pending engine reply never reappears after H hides the coach',async()=>{
+  let finish;
+  const h=harness(m=>m.action==='analyze'?new Promise(resolve=>{finish=resolve;}):undefined);
+  await h.advance(0);
+  assert.equal(h.text,'Analyzing…');
+  h.key('h');
+  finish({ok:true,instruction:'Stale best move'});
+  await flush();
+  assert.equal(h.text,undefined);
+  assert.equal(h.timerCount,0);
+});
+
+test('persisted hidden setting blocks initial board reads and engine requests',async()=>{
+  const h=harness(undefined,'/analysis',{playerSide:'w',thinkSeconds:1,showDetails:false,coachHidden:true});
+  await h.advance(12000);
+  assert.equal(h.reads,0);
+  assert.equal(h.requests.length,0);
+  h.key('h');
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
 });

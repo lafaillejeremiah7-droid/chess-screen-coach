@@ -9,13 +9,15 @@
   let lastText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
-  let lockedPlayerColor=null;
-  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false};
+  let lockedPlayerColor=null,coachHidden=false;
+  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
     settings.showDetails=values.showDetails===true;
+    settings.coachHidden=values.coachHidden===true;
+    setCoachHidden(settings.coachHidden);
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
@@ -42,7 +44,7 @@
     return location.protocol==="https:"&&
       (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
-  const active=()=>eligible()&&!document.hidden;
+  const active=()=>eligible()&&!document.hidden&&!coachHidden;
   const current=epoch=>active()&&epoch===generation;
 
   function show(message){
@@ -209,7 +211,8 @@
 
   function resume(){
     stopWatching();
-    if(document.hidden)return;
+    if(document.hidden||coachHidden)return;
+    if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
     if(currentBoard?.isConnected)watchBoard(currentBoard);
     // This lightweight check only discovers a missing/replaced board or route.
     // A connected, unchanged board does not trigger reads or Python requests.
@@ -223,11 +226,41 @@
     schedule(0);
   }
 
+  // H hides the entire injected coach, not only a training-mode message.
+  // Paused tabs do not observe boards, poll for new positions, or request analysis.
+  function setCoachHidden(hidden){
+    if(coachHidden===hidden)return;
+    coachHidden=hidden;
+    if(hidden){
+      stopWatching(); // Invalidates an in-flight response.
+      document.getElementById("chess-study-no-share-overlay")?.remove();
+      lastText="";settledText=null;analysisPending=true;retryAt=0;
+    }else{
+      lastText="";settledText=null;analysisPending=true;retryAt=0;
+      resume();
+    }
+  }
+
+  function handleHotkey(event){
+    if(typeof event.key!=="string"||event.key.toLowerCase()!=="h"||
+       event.repeat||event.isComposing||event.ctrlKey||event.altKey||event.metaKey)return;
+    // Never hijack H while typing, searching, chatting, or editing a position.
+    const target=event.target;
+    const tag=target?.tagName?.toUpperCase?.()||"";
+    if(["INPUT","TEXTAREA","SELECT"].includes(tag)||target?.isContentEditable||
+       target?.closest?.('[contenteditable=""],[contenteditable="true"],[role="textbox"]'))return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    const hidden=!coachHidden;
+    setCoachHidden(hidden);
+    // Keep other Chess.com tabs and reloads in the same hidden/visible state.
+    try{chrome.storage?.local?.set?.({coachHidden:hidden});}catch{}
+  }
+
+  document.addEventListener("keydown",handleHotkey,true);
   document.addEventListener("visibilitychange",resume);
   window.addEventListener("pagehide",stopWatching);
   window.addEventListener("pageshow",resume);
-  resume();
-  chrome.storage?.local?.get?.(settings,applySettings);
   chrome.storage?.onChanged?.addListener?.((changes,area)=>{
     if(area==="local"){
       const next={...settings};
@@ -237,4 +270,11 @@
       applySettings(next);
     }
   });
+  // Read the saved hidden state before starting the observer or engine requests.
+  if(chrome.storage?.local?.get)
+    chrome.storage.local.get(settings,values=>{
+      applySettings(values);
+      if(!coachHidden)resume();
+    });
+  else resume();
 })();

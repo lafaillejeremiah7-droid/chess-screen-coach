@@ -1,18 +1,18 @@
 #chess-study-no-share-overlay {
   position:fixed !important;
-  top:10px !important;
+  top:6px !important;
   left:50% !important;
   transform:translateX(-50%) !important;
   width:max-content !important;
-  max-width:min(90vw,650px) !important;
-  padding:12px 18px !important;
+  max-width:min(85vw,430px) !important;
+  padding:6px 10px !important;
   color:#ffffff !important;
   background:rgba(13,24,35,.96) !important;
   border:1px solid #55718a !important;
-  border-radius:11px !important;
+  border-radius:7px !important;
   box-shadow:0 4px 25px rgba(0,0,0,.40) !important;
   z-index:2147483647 !important;
-  font:700 21px/1.3 system-ui,-apple-system,sans-serif !important;
+  font:650 13px/1.25 system-ui,-apple-system,sans-serif !important;
   text-align:center !important;
   letter-spacing:normal !important;
   pointer-events:none !important;
