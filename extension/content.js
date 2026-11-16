@@ -7,7 +7,7 @@
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
   let lastText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
-  let processing=false,dirty=false,generation=0,retryAt=0;
+  let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
 
   function eligible(){
@@ -35,7 +35,7 @@
     observer?.disconnect();observer=null;
     currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
     healthChecked=false;analysisPending=false;rejectedPosition=null;retryAt=0;
-    lastText="";settledText=null;
+    lastText="";settledText=null;badSnapshots=0;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
 
@@ -49,7 +49,7 @@
     observer?.disconnect();
     // Observe only this board, not clocks, chat, ads, or our overlay.
     observer=new MutationObserver(()=>schedule());
-    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
+    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","data-orientation"]});
   }
 
   function retry(message){
@@ -90,23 +90,35 @@
       if(Date.now()<retryAt){schedule(retryAt-Date.now());return;}
       let snapshot;
       try{snapshot=reader.snapshot(document);}
-      catch{show("Board updating; checking again.");return;}
-      if(!snapshot){show("Open a Chess.com board to start tracking.");return;}
+      catch{
+        show("Board updating; checking again.");
+        badSnapshots=Math.min(badSnapshots+1,5);
+        schedule(Math.min(400*badSnapshots,2000));
+        return;
+      }
+      badSnapshots=0;
+      if(!snapshot){
+        // Do not leave a stale instruction on a page with no chessboard.
+        document.getElementById("chess-study-no-share-overlay")?.remove();
+        lastText="";settledText=null;
+        return;
+      }
       if(snapshot.board!==currentBoard){
         currentBoard=snapshot.board;currentFen=null;lastPlacement=null;
         lastColor=snapshot.myColor;analysisPending=false;rejectedPosition=null;settledText=null;
         watchBoard(currentBoard);
       }
       if(snapshot.myColor!==lastColor){
-        lastColor=snapshot.myColor;currentFen=null;lastPlacement=null;
-        analysisPending=false;rejectedPosition=null;settledText=null;
+        // Flipping a board changes its orientation, not the game's position.
+        lastColor=snapshot.myColor;
+        analysisPending=true;rejectedPosition=null;settledText=null;
       }
       const placement=snapshot.placement;
       if(placement===lastPlacement&&!analysisPending){if(settledText)show(settledText);return;}
       const positionKey=currentFen+"|"+placement;
       // A rejected board must change before another two-ply search is useful.
       if(positionKey===rejectedPosition)return;
-      if(!currentFen&&placement!==reader.initial){
+      if(!currentFen&&placement!==reader.initial&&!snapshot.fen){
         show("Start from the initial position, or enter FEN in the analysis dashboard.");
         return;
       }
@@ -120,6 +132,7 @@
 
       let nextFen=currentFen;
       if(placement===reader.initial){nextFen=INITIAL;}
+      else if(!currentFen&&snapshot.fen){nextFen=snapshot.fen;}
       else if(placement!==lastPlacement){
         const tracked=await request("track",{previous:currentFen,placement});
         if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
@@ -164,8 +177,10 @@
     watchTimer=setInterval(()=>{
       if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
       if(!eligible())return;
-      if(!currentBoard?.isConnected)schedule(0);
-    },2000);
+      // Low-frequency safety scan recovers from missed DOM mutations and new boards.
+      // It makes no engine request when the chess position is unchanged.
+      schedule(0);
+    },4000);
     schedule(0);
   }
 
