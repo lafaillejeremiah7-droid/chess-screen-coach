@@ -10,11 +10,11 @@
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null;
-  const settings={playerSide:"auto",thinkSeconds:0.2,showDetails:false};
+  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
-    settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:0.2;
+    settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
     settings.showDetails=values.showDetails===true;
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
