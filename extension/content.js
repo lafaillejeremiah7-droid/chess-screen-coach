@@ -114,7 +114,7 @@
         analysisPending=true;rejectedPosition=null;settledText=null;
       }
       const placement=snapshot.placement;
-      if(placement===lastPlacement&&!analysisPending){if(settledText)show(settledText);return;}
+      if(placement===lastPlacement&&!analysisPending&&(!snapshot.fen||snapshot.fen===currentFen)){if(settledText)show(settledText);return;}
       const positionKey=currentFen+"|"+placement;
       // A rejected board must change before another two-ply search is useful.
       if(positionKey===rejectedPosition)return;
@@ -131,8 +131,8 @@
       }
 
       let nextFen=currentFen;
-      if(placement===reader.initial){nextFen=INITIAL;}
-      else if(!currentFen&&snapshot.fen){nextFen=snapshot.fen;}
+      if(snapshot.fen){nextFen=snapshot.fen;}
+      else if(placement===reader.initial){nextFen=INITIAL;}
       else if(placement!==lastPlacement){
         const tracked=await request("track",{previous:currentFen,placement});
         if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
