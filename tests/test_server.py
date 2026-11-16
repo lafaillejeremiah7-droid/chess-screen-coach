@@ -96,7 +96,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn(initial_fen, server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 0.2), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.play.call_count, 3)
 
     def test_busy_engine_does_not_queue_more_searches(self):
@@ -122,3 +122,52 @@ class AnalysisWorkloadTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AdjustableAnalysisTests(unittest.TestCase):
+    def setUp(self):
+        server.ANALYSIS_CACHE.clear()
+        self.engine = Mock()
+        def play(board, limit, **kwargs):
+            move = next(iter(board.legal_moves))
+            return chess.engine.PlayResult(move, None, info={
+                "depth": 15, "nodes": 9000,
+                "score": chess.engine.PovScore(chess.engine.Cp(70), board.turn)
+            })
+        self.engine.play.side_effect = play
+        self.patcher = patch.object(server, "ENGINE", self.engine)
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        server.ANALYSIS_CACHE.clear()
+
+    def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
+        result=server.analyze_fen(chess.Board().fen(), 1)
+        self.assertEqual(result["seconds"], 1.0)
+        self.assertEqual(result["depth"], 15)
+        self.assertEqual(result["nodes"], 9000)
+        self.assertEqual(result["score_cp"], 70)
+        self.assertEqual(result["mate_in"], None)
+        self.assertTrue(result["reason"])
+        self.assertAlmostEqual(self.engine.play.call_args.args[1].time, 1.0)
+
+    def test_cache_separates_search_budgets(self):
+        fen=chess.Board().fen()
+        server.analyze_fen(fen,0.2)
+        server.analyze_fen(fen,1)
+        server.analyze_fen(fen,0.2)
+        self.assertEqual(self.engine.play.call_count,2)
+        self.assertIn((fen,0.2),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0),server.ANALYSIS_CACHE)
+
+    def test_rejects_invalid_search_times(self):
+        for seconds in (0,0.1,0.7,5,True,"1",float("nan")):
+            with self.subTest(seconds=seconds):
+                with self.assertRaises(ValueError):
+                    server.analyze_fen(chess.Board().fen(),seconds)
+        self.engine.play.assert_not_called()
+
+    def test_move_reason_uses_verifiable_board_features(self):
+        board=chess.Board("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+        self.assertEqual(server.describe_move(board,chess.Move.from_uci("e1g1")), "Castles the king.")
+        self.assertIn("Captures",server.describe_move(board,chess.Move.from_uci("a1a8")))
