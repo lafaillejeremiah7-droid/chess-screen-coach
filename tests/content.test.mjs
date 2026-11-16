@@ -301,7 +301,7 @@ test('H hides the entire coach and pauses observation and engine requests until 
   const count=h.requests.length,reads=h.reads;
   h.key('h');
   assert.equal(h.text,undefined);
-  assert.equal(h.timerCount,0);
+  assert.equal(h.timerCount,1); // Only the control-state sync timer remains.
   h.state.placement=e4;h.mutate();await h.advance(12000);
   assert.equal(h.requests.length,count);
   assert.equal(h.reads,reads);
@@ -332,7 +332,7 @@ test('a pending engine reply never reappears after H hides the coach',async()=>{
   finish({ok:true,instruction:'Stale best move'});
   await flush();
   assert.equal(h.text,undefined);
-  assert.equal(h.timerCount,0);
+  assert.equal(h.timerCount,1); // No board watching or engine polling.
 });
 
 test('persisted hidden setting blocks initial board reads and engine requests',async()=>{
