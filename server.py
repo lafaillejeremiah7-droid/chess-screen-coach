@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import shutil
 import threading
 from collections import OrderedDict
@@ -32,8 +33,13 @@ PIECE_NAMES = {
 }
 
 
+def is_stockfish19_name(name: str | None) -> bool:
+    """Prevent a silent fallback to outdated system Stockfish executables."""
+    return isinstance(name, str) and re.match(r"^Stockfish 19(?:\s|$)", name) is not None
+
+
 def stockfish_location() -> str:
-    """Find local Stockfish; on Debian/ChromeOS it commonly lives in /usr/games."""
+    """Find a Stockfish executable; verify its UCI identity before use."""
     explicit = os.getenv("STOCKFISH_PATH")
     if explicit:
         if Path(explicit).is_file() and os.access(explicit, os.X_OK):
@@ -236,7 +242,9 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         if path == "/api/health":
             return self.respond_json(200, {"python": True, "stockfish": ENGINE is not None,
+                                           "stockfish19": ENGINE is not None and is_stockfish19_name(ENGINE.id.get("name")),
                                            "engine": ENGINE.id.get("name") if ENGINE is not None else None,
+                                           "default_seconds": ANALYSIS_SECONDS,
                                            "times": ALLOWED_ANALYSIS_SECONDS})
         if path == "/":
             path = "/index.html"
@@ -268,9 +276,16 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     global ENGINE
     try:
-        ENGINE = chess.engine.SimpleEngine.popen_uci(stockfish_location())
+        engine_path = stockfish_location()
+        ENGINE = chess.engine.SimpleEngine.popen_uci(engine_path)
+        name = ENGINE.id.get("name")
+        if not is_stockfish19_name(name):
+            raise RuntimeError(
+                f"Expected Stockfish 19, found {name!r} at {engine_path}. "
+                "Run: python3 scripts/install_stockfish19.py"
+            )
         ENGINE.configure({"Threads": 1, "Hash": 16})
-        print("Stockfish ready: 1 thread, 16 MiB hash, selectable 0.2-2s searches; no pondering.")
+        print(f"Stockfish 19 ready: {engine_path}; 1 thread, 16 MiB hash; default 1-second analysis.")
     except Exception as exc:
         if ENGINE is not None:
             ENGINE.close()
