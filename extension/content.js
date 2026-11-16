@@ -100,7 +100,7 @@
       if(!snapshot){
         // Do not leave a stale instruction on a page with no chessboard.
         document.getElementById("chess-study-no-share-overlay")?.remove();
-        lastText="";settledText=null;
+        lastText="";settledText=null;lastPlacement=null;analysisPending=true;
         return;
       }
       if(snapshot.board!==currentBoard){
