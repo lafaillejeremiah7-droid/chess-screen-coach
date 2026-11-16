@@ -170,4 +170,5 @@ class AdjustableAnalysisTests(unittest.TestCase):
     def test_move_reason_uses_verifiable_board_features(self):
         board=chess.Board("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
         self.assertEqual(server.describe_move(board,chess.Move.from_uci("e1g1")), "Castles the king.")
-        self.assertIn("Captures",server.describe_move(board,chess.Move.from_uci("a1a8")))
+        capture=chess.Board("7k/8/8/8/p7/8/R7/7K w - - 0 1")
+        self.assertIn("Captures",server.describe_move(capture,chess.Move.from_uci("a2a4")))
