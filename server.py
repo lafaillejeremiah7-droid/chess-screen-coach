@@ -22,6 +22,9 @@ import chess.engine
 ROOT = Path(__file__).resolve().parent
 ENGINE_LOCK = threading.Lock()
 ENGINE: chess.engine.SimpleEngine | None = None
+CONTROL_LOCK = threading.Lock()
+COACH_HIDDEN = False
+ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
@@ -101,6 +104,51 @@ def search_seconds(value: float | None) -> float:
     return float(value)
 
 
+def coach_control(hidden: bool | None = None) -> dict:
+    """Shared pause state for the extension and the floating-window dashboard."""
+    global COACH_HIDDEN
+    if hidden is not None:
+        if type(hidden) is not bool:
+            raise ValueError("hidden must be true or false")
+        with CONTROL_LOCK:
+            COACH_HIDDEN = hidden
+            running = ACTIVE_ANALYSIS if hidden else None
+        if running is not None:
+            running.stop()  # Stop the active UCI search, not just its UI result.
+    with CONTROL_LOCK:
+        return {"hidden": COACH_HIDDEN, "engine_running": ACTIVE_ANALYSIS is not None}
+
+
+def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
+    """Search with an externally stoppable handle; caller owns ENGINE_LOCK."""
+    global ACTIVE_ANALYSIS
+    if ENGINE is None:
+        raise RuntimeError("Stockfish is unavailable")
+    with CONTROL_LOCK:
+        if COACH_HIDDEN:
+            raise RuntimeError("Chess coach hidden; analysis paused")
+    analysis = ENGINE.analysis(board, chess.engine.Limit(time=seconds),
+                               info=chess.engine.INFO_ALL, root_moves=root_moves)
+    try:
+        with CONTROL_LOCK:
+            ACTIVE_ANALYSIS = analysis
+            hidden = COACH_HIDDEN
+        if hidden:
+            analysis.stop()
+        with analysis:
+            for _ in analysis:
+                pass
+            result = dict(analysis.info)
+    finally:
+        with CONTROL_LOCK:
+            if ACTIVE_ANALYSIS is analysis:
+                ACTIVE_ANALYSIS = None
+    with CONTROL_LOCK:
+        if COACH_HIDDEN:
+            raise RuntimeError("Chess coach hidden; analysis canceled")
+    return result
+
+
 def analyze_fen(fen: str, seconds: float | None = None) -> dict:
     seconds = search_seconds(seconds)
     if not isinstance(fen, str) or len(fen) > 120:
@@ -123,12 +171,11 @@ def analyze_fen(fen: str, seconds: float | None = None) -> dict:
         if key in ANALYSIS_CACHE:
             ANALYSIS_CACHE.move_to_end(key)
             return dict(ANALYSIS_CACHE[key])
-        result = ENGINE.play(board, chess.engine.Limit(time=seconds), ponder=False,
-                             info=chess.engine.INFO_ALL)
-        move = result.move
+        info = engine_info(board, seconds)
+        pv = info.get("pv") or []
+        move = pv[0] if pv else None
         if move is None:
             raise RuntimeError("Stockfish did not return a legal move")
-        info = result.info or {}
         score = info.get("score")
         pov_score = score.pov(board.turn) if score is not None else None
         answer = {
@@ -219,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         endpoint = urlparse(self.path).path
-        if endpoint not in ("/api/analyze", "/api/track"):
+        if endpoint not in ("/api/analyze", "/api/track", "/api/control", "/api/training/evaluate"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -228,8 +275,14 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError("Expected JSON object")
-            if endpoint == "/api/track":
+            if endpoint == "/api/control":
+                result = coach_control(data.get("hidden"))
+            elif endpoint == "/api/track":
                 result = advance_position(data.get("previous"), data.get("placement"))
+            elif endpoint == "/api/training/evaluate":
+                from training import evaluate_attempt
+                result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
+                                          ENGINE_LOCK, ENGINE)
             else:
                 result = analyze_fen(data.get("fen"), data.get("seconds"))
             self.respond_json(200, result)
@@ -240,6 +293,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = unquote(urlparse(self.path).path)
+        if path == "/api/control":
+            return self.respond_json(200, coach_control())
+        if path == "/api/training/positions":
+            from training import position_bank
+            return self.respond_json(200, {"positions": position_bank()})
         if path == "/api/health":
             return self.respond_json(200, {"python": True, "stockfish": ENGINE is not None,
                                            "stockfish19": ENGINE is not None and is_stockfish19_name(ENGINE.id.get("name")),
@@ -252,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
             path = "/public/templates/pieces.json"
         # Only serve the specific files needed by the local browser interface.
         permitted = (
-            path in ("/index.html", "/src/app.js", "/src/recognition.js", "/src/style.css")
+            path in ("/index.html", "/training.html", "/src/training.js", "/src/app.js", "/src/recognition.js", "/src/style.css")
             or path == "/public/templates/pieces.json"
         )
         if not permitted:
