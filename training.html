@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Adaptive Stockfish Training — Chess Screen Coach</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <style>
+    .trainer{max-width:740px;margin:18px auto}
+    .trainer-grid{display:grid;grid-template-columns:minmax(250px,460px) 1fr;gap:18px}
+    .trainer-board{display:grid;grid-template-columns:repeat(8,1fr);border:3px solid #334155;aspect-ratio:1}
+    .trainer-board button{border:0;border-radius:0;aspect-ratio:1;padding:0;font-size:clamp(18px,5vw,39px);line-height:1;font-family:serif}
+    .trainer-board button.light{background:#eeeed2;color:#191919}
+    .trainer-board button.dark{background:#769656;color:#191919}
+    .trainer-board button.selected{outline:4px solid #eab308;outline-offset:-4px}
+    .trainer-board button:focus-visible{outline:3px solid #db7d12;outline-offset:-3px}
+    .trainer-stats{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+    .trainer-stat{background:#243444;border-radius:9px;padding:10px;min-width:95px}
+    .trainer-stat b{display:block;font-size:20px}
+    .trainer-panel{background:#172534;padding:14px;border-radius:12px}
+    .trainer-panel input{width:100%;padding:10px;color:#fff;background:#101c28;border:1px solid #6084a0;border-radius:7px}
+    #trainer-feedback{min-height:75px;white-space:pre-line}
+    .trainer-paused .trainer-board,.trainer-paused .trainer-panel{visibility:hidden}
+    @media(max-width:680px){.trainer-grid{grid-template-columns:1fr}.trainer-board{max-width:480px}}
+  </style>
+</head>
+<body>
+  <main class="layout trainer">
+    <header><h1>Adaptive Stockfish 19 practice</h1>
+      <p>100 positions · 10 seconds to predict a move · immediate engine scoring · weakness-focused spaced repetition</p></header>
+    <p><a href="/" style="color:#9cc8ed">Return to chess dashboard</a> · Press <strong>H</strong> to hide or show the coach.</p>
+    <div class="trainer-stats">
+      <div class="trainer-stat">Progress<b id="progress">0 / 100</b></div>
+      <div class="trainer-stat">Time<b id="clock">10s</b></div>
+      <div class="trainer-stat">Avg loss<b id="avg-loss">—</b></div>
+      <div class="trainer-stat">Exact matches<b id="accuracy">—</b></div>
+    </div>
+    <div class="trainer-grid">
+      <div id="trainer-board" class="trainer-board" aria-label="Interactive chessboard"></div>
+      <section class="trainer-panel">
+        <p id="position" aria-live="polite">Press Start Session to load positions.</p>
+        <label for="candidate">Your move (UCI format, e.g. e2e4)</label>
+        <input id="candidate" autocomplete="off" spellcheck="false" placeholder="Or click the from/to squares">
+        <div class="toolbar">
+          <button id="submit">Submit prediction</button>
+          <button id="start" class="outline">Start 100-position session</button>
+          <button id="next" class="outline" hidden>Next position</button>
+        </div>
+        <p id="trainer-feedback" role="status">No Stockfish hint appears until you submit your own move or time expires.</p>
+        <p class="hint">Positions and improvement statistics are stored locally in this browser. A move is compared with the same engine using equal 1-second searches. Scores are approximate, not proof of perfect play.</p>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/src/training.js"></script>
+</body>
+</html>
