@@ -1,10 +1,21 @@
 """Unit checks for move wording and legal position tracking."""
 import unittest
+import threading
 from unittest.mock import Mock, patch
 import chess
 import chess.engine
 import server
 from server import format_instruction, advance_position
+
+class FakeAnalysis:
+    def __init__(self, move, info=None):
+        self.info={"pv":[move],**(info or {})}
+        self.stopped=False
+    def __enter__(self):return self
+    def __exit__(self,*args):return False
+    def __iter__(self):
+        yield self.info
+    def stop(self):self.stopped=True
 
 
 class ChessCoachTests(unittest.TestCase):
@@ -69,8 +80,9 @@ class AnalysisWorkloadTests(unittest.TestCase):
     def setUp(self):
         server.ANALYSIS_CACHE.clear()
         self.engine = Mock()
-        self.engine.play.side_effect = lambda board, *args, **kwargs: chess.engine.PlayResult(
-            next(iter(board.legal_moves)), None)
+        server.coach_control(False)
+        self.engine.analysis.side_effect = lambda board, *args, **kwargs: FakeAnalysis(
+            next(iter(board.legal_moves)))
         self.engine_patch = patch.object(server, "ENGINE", self.engine)
         self.engine_patch.start()
 
@@ -85,7 +97,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
         original = dict(first)
         first["instruction"] = "Caller changed the returned dictionary"
         self.assertEqual(server.analyze_fen(board.fen()), original)
-        self.assertEqual(self.engine.play.call_count, 1)
+        self.assertEqual(self.engine.analysis.call_count, 1)
 
     def test_different_positions_are_analyzed_and_cache_is_bounded(self):
         with patch.object(server, "MAX_CACHED_POSITIONS", 2):
@@ -106,15 +118,15 @@ class AnalysisWorkloadTests(unittest.TestCase):
         self.engine.play.assert_not_called()
 
     def test_engine_failure_releases_lock_and_can_be_retried(self):
-        self.engine.play.side_effect = RuntimeError("Temporary engine failure")
+        self.engine.analysis.side_effect = RuntimeError("Temporary engine failure")
         with self.assertRaisesRegex(RuntimeError, "Temporary"):
             server.analyze_fen(chess.Board().fen())
         self.assertFalse(server.ENGINE_LOCK.locked())
         self.assertFalse(server.ANALYSIS_CACHE)
 
     def test_invalid_engine_move_is_never_cached(self):
-        self.engine.play.side_effect = None
-        self.engine.play.return_value = chess.engine.PlayResult(chess.Move.from_uci("e2e5"), None)
+        self.engine.analysis.side_effect = None
+        self.engine.analysis.return_value = FakeAnalysis(chess.Move.from_uci("e2e5"))
         with self.assertRaisesRegex(ValueError, "not legal"):
             server.analyze_fen(chess.Board().fen())
         self.assertFalse(server.ANALYSIS_CACHE)
@@ -126,14 +138,15 @@ if __name__ == "__main__":
 class AdjustableAnalysisTests(unittest.TestCase):
     def setUp(self):
         server.ANALYSIS_CACHE.clear()
+        server.coach_control(False)
         self.engine = Mock()
         def play(board, limit, **kwargs):
             move = next(iter(board.legal_moves))
-            return chess.engine.PlayResult(move, None, info={
+            return FakeAnalysis(move, info={
                 "depth": 15, "nodes": 9000,
                 "score": chess.engine.PovScore(chess.engine.Cp(70), board.turn)
             })
-        self.engine.play.side_effect = play
+        self.engine.analysis.side_effect = play
         self.patcher = patch.object(server, "ENGINE", self.engine)
         self.patcher.start()
 
@@ -179,3 +192,51 @@ class AdjustableAnalysisTests(unittest.TestCase):
         self.assertEqual(server.describe_move(board,chess.Move.from_uci("e1g1")), "Castles the king.")
         capture=chess.Board("7k/8/8/8/p7/8/R7/7K w - - 0 1")
         self.assertIn("Captures",server.describe_move(capture,chess.Move.from_uci("a2a4")))
+
+
+class RecoveryTests(unittest.TestCase):
+    def test_replays_many_moves_without_guessing(self):
+        board = chess.Board()
+        san = ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6"]
+        for move in san: board.push_san(move)
+        result = server.recover_from_history(san,board.board_fen())
+        self.assertEqual(result["fen"],board.fen())
+        self.assertEqual(result["recovered_moves"],8)
+
+    def test_rejects_history_that_disagrees_with_board(self):
+        with self.assertRaisesRegex(ValueError,"does not match"):
+            server.recover_from_history(["e4","e5"],chess.Board().board_fen())
+
+
+class AdaptiveTrainingTests(unittest.TestCase):
+    def test_bank_has_at_least_100_legal_unique_positions(self):
+        from training import position_bank
+        positions=position_bank()
+        self.assertGreaterEqual(len(positions),100)
+        self.assertEqual(len({item["fen"] for item in positions}),len(positions))
+        for item in positions:
+            board=chess.Board(item["fen"])
+            self.assertTrue(board.is_valid())
+            self.assertFalse(board.is_game_over())
+
+    def test_engine_scores_submitted_move_and_preserves_perspective(self):
+        from training import evaluate_attempt
+        board=chess.Board()
+        def search(position, seconds, root_moves=None):
+            target=chess.Move.from_uci("e2e4")
+            if root_moves:
+                self.assertEqual(root_moves[0],chess.Move.from_uci("a2a3"))
+                return {"pv":root_moves,"score":chess.engine.PovScore(chess.engine.Cp(5),position.turn)}
+            return {"pv":[target],"score":chess.engine.PovScore(chess.engine.Cp(65),position.turn)}
+        result=evaluate_attempt(board.fen(),"a2a3",search,threading.Lock(),object())
+        self.assertEqual(result["centipawn_loss"],60)
+        self.assertEqual(result["best_san"],"e4")
+        self.assertEqual(result["played_san"],"a3")
+
+    def test_hidden_control_blocks_engine_requests(self):
+        server.coach_control(True)
+        try:
+            with self.assertRaisesRegex(RuntimeError,"paused"):
+                server.analyze_fen(chess.Board().fen())
+        finally:
+            server.coach_control(False)
