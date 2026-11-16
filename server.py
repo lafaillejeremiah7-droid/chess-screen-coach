@@ -150,6 +150,10 @@ def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
 
 
 def analyze_fen(fen: str, seconds: float | None = None) -> dict:
+    # H suspends analysis even when an earlier answer is already cached.
+    with CONTROL_LOCK:
+        if COACH_HIDDEN:
+            raise RuntimeError("Chess coach hidden; analysis paused")
     seconds = search_seconds(seconds)
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
