@@ -96,7 +96,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn((initial_fen, 0.2), server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.play.call_count, 3)
 
     def test_busy_engine_does_not_queue_more_searches(self):
@@ -140,6 +140,13 @@ class AdjustableAnalysisTests(unittest.TestCase):
     def tearDown(self):
         self.patcher.stop()
         server.ANALYSIS_CACHE.clear()
+
+    def test_default_search_uses_one_second(self):
+        fen = chess.Board().fen()
+        answer = server.analyze_fen(fen)
+        self.assertEqual(answer["seconds"], 1.0)
+        self.assertEqual(self.engine.play.call_args.args[1].time, 1.0)
+        self.assertIn((fen, 1.0), server.ANALYSIS_CACHE)
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
         result=server.analyze_fen(chess.Board().fen(), 1)
