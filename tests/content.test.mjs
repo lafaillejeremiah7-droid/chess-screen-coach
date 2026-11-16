@@ -9,7 +9,7 @@ const e4='rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
 const e5='rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR';
 const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 
-function harness(respond){
+function harness(respond,pathname='/play/computer'){
   let now=0,serial=0,reads=0;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
   const requests=[];
@@ -21,7 +21,7 @@ function harness(respond){
     createElement(){return {setAttribute(){},remove(){elements.delete(this.id);}};},
     addEventListener(name,callback){events.set(name,callback);}
   };
-  const location={pathname:'/play/computer'};
+  const location={pathname,protocol:'https:',hostname:'www.chess.com'};
   function timer(fn,delay,interval=0){
     const id=++serial;timers.set(id,{fn,at:now+delay,interval});return id;
   }
@@ -147,12 +147,18 @@ test('new games on a reused board restart from the initial position',async()=>{
   assert.equal(h.requests.at(-1).fen,initial+' w KQkq - 0 1');
 });
 
-test('leaving a supported route removes the overlay and stops board work',async()=>{
-  const h=harness();await h.advance(0);
-  const count=h.requests.length;
-  h.location.pathname='/play/online';h.mutate();await h.advance(10000);
-  assert.equal(h.requests.length,count);assert.equal(h.text,undefined);
-  h.location.pathname='/play/computer';await h.advance(2000);
+test('Chess.com human-game route is eligible for engine analysis',async()=>{
+  const h=harness(undefined,'/play/online');
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+  assert.deepEqual(h.requests.map(x=>x.action),['health','analyze']);
+  h.state.placement=e4;h.mutate();await h.advance(200);
+  assert.equal(h.requests.at(-1).action,'track');
+});
+
+test('Chess.com analysis route remains eligible',async()=>{
+  const h=harness(undefined,'/analysis');
+  await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
 });
 
