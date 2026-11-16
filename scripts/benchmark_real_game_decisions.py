@@ -41,7 +41,7 @@ def real_game_positions():
         uri=f"https://raw.githubusercontent.com/mainali123/Chess-Dataset/{SOURCE_COMMIT}/{safe_path}"
         with urllib.request.urlopen(uri,timeout=30) as response:
             data=response.read()
-        git_hash=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\\0"+data).hexdigest()
+        git_hash=hashlib.sha1(b"blob "+str(len(data)).encode()+bytes([0])+data).hexdigest()
         if git_hash!=expected_blob:
             raise RuntimeError(f"PGN content integrity check failed: {path}")
         stream=io.StringIO(data.decode("utf-8-sig",errors="replace"))
@@ -183,7 +183,7 @@ def benchmark():
         "limitations":"Single-run same-engine comparison, 3s reference not ground truth, one machine, no ELO or win-rate claims.",
         "positions":output
     }
-    Path("decision_quality_real_games.json").write_text(json.dumps(report,indent=2)+"\\n")
+    Path("decision_quality_real_games.json").write_text(json.dumps(report,indent=2)+chr(10))
     print("RESULT",json.dumps({k:v for k,v in report.items() if k!="positions"}),flush=True)
     print("EXAMPLES",json.dumps(sorted(output,key=lambda x:(x["decisions"]["0.2"]["estimated_cp_loss"] or 0),reverse=True)[:5]),flush=True)
 
