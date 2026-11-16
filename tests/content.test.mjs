@@ -20,7 +20,7 @@ function harness(respond,pathname='/play/computer',options=null){
     body:{appendChild(element){elements.set(element.id,element);}},
     getElementById(id){return elements.get(id);},
     createElement(){return {setAttribute(){},remove(){elements.delete(this.id);}};},
-    addEventListener(name,callback){events.set(name,callback);}
+    addEventListener(name,callback){const listeners=events.get(name)||[];listeners.push(callback);events.set(name,listeners);}
   };
   const location={pathname,protocol:'https:',hostname:'www.chess.com'};
   function timer(fn,delay,interval=0){
@@ -65,8 +65,8 @@ function harness(respond,pathname='/play/computer',options=null){
     get timerCount(){return timers.size;},
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
-    visibility(hidden){document.hidden=hidden;events.get('visibilitychange')();},
-    key(key,overrides={}){events.get('keydown')?.({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
+    visibility(hidden){document.hidden=hidden;for(const listener of events.get('visibilitychange')||[])listener();},
+    key(key,overrides={}){for(const listener of events.get('keydown')||[])listener({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
     async advance(ms){
       const end=now+ms;
       for(let step=0;step<10000;step++){
