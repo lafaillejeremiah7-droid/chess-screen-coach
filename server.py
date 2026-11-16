@@ -297,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         endpoint = urlparse(self.path).path
-        if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate"):
+        if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate", "/api/sparring/turn"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -316,6 +316,9 @@ class Handler(BaseHTTPRequestHandler):
                 from training import evaluate_attempt
                 result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
                                           ENGINE_LOCK, ENGINE)
+            elif endpoint == "/api/sparring/turn":
+                from sparring import play_practice_turn
+                result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"))
             else:
                 result = analyze_fen(data.get("fen"), data.get("seconds"))
             self.respond_json(200, result)
@@ -328,6 +331,9 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         if path == "/api/control":
             return self.respond_json(200, coach_control())
+        if path == "/api/sparring/start":
+            from sparring import initial_position
+            return self.respond_json(200, initial_position())
         if path == "/api/training/positions":
             from training import position_bank
             return self.respond_json(200, {"positions": position_bank()})
@@ -343,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
             path = "/public/templates/pieces.json"
         # Only serve the specific files needed by the local browser interface.
         permitted = (
-            path in ("/index.html", "/training.html", "/src/training.js", "/src/app.js", "/src/recognition.js", "/src/style.css")
+            path in ("/index.html", "/training.html", "/sparring.html", "/src/training.js", "/src/sparring.js", "/src/app.js", "/src/recognition.js", "/src/style.css")
             or path == "/public/templates/pieces.json"
         )
         if not permitted:
