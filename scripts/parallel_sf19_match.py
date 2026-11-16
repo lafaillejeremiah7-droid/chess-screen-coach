@@ -9,8 +9,12 @@ import argparse
 import concurrent.futures
 import json
 import os
+import sys
 import time
 from pathlib import Path
+
+# Allow both `python scripts/parallel_sf19_match.py` and package-style imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import chess.engine
 from scripts.compare_engines import OPENINGS, play_game
