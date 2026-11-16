@@ -21,7 +21,7 @@ import chess.engine
 ROOT = Path(__file__).resolve().parent
 ENGINE_LOCK = threading.Lock()
 ENGINE: chess.engine.SimpleEngine | None = None
-ANALYSIS_SECONDS = 0.2
+ANALYSIS_SECONDS = 1.0
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
