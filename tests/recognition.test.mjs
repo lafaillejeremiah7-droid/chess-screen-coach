@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {INITIAL,fenToBoard,boardToFen,tileFeature,recognizeTile} from '../src/recognition.js';
+import {INITIAL,fenToBoard,boardToFen,tileFeature,recognizeTile,isBlackCapture} from '../src/recognition.js';
 test('starting FEN roundtrip with White at bottom',()=>{
   const b=fenToBoard(INITIAL,'white');
   assert.equal(b[0].join(''),'rnbqkbnr');
@@ -23,4 +23,21 @@ test('empty tile is classified empty',()=>{
   const f=tileFeature(data);
   assert.equal(f.area,0);
   assert.equal(recognizeTile(f,{}).piece,'.');
+});
+test('all-black screen capture is rejected without recognizing pieces',()=>{
+  const data=new Uint8ClampedArray(32*32*4);
+  for(let i=3;i<data.length;i+=4)data[i]=255;
+  assert.equal(isBlackCapture({data}),true);
+});
+test('normal dark board containing visible pieces is not classified as a black capture',()=>{
+  const data=new Uint8ClampedArray(32*32*4);
+  for(let i=0;i<data.length;i+=4){
+    const bright=(i/4)%8===0;
+    data[i]=data[i+1]=data[i+2]=bright?210:4;
+    data[i+3]=255;
+  }
+  assert.equal(isBlackCapture({data}),false);
+});
+test('invalid capture samples do not incorrectly report a blackout',()=>{
+  assert.equal(isBlackCapture({data:new Uint8ClampedArray()}),false);
 });
