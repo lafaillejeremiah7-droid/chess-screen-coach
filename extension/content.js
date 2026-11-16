@@ -9,7 +9,7 @@
   let lastText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
-  let lockedPlayerColor=null,coachHidden=false;
+  let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
   const settings={playerSide:"auto",thinkSeconds:1,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
@@ -44,7 +44,9 @@
     return location.protocol==="https:"&&
       (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
-  const active=()=>eligible()&&!document.hidden&&!coachHidden;
+  // Human-vs-human games never receive engine move suggestions.
+  const analysisAllowed=()=>/^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname);
+  const active=()=>eligible()&&analysisAllowed()&&!document.hidden&&!coachHidden;
   const current=epoch=>active()&&epoch===generation;
 
   function show(message){
@@ -173,12 +175,19 @@
         if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
         if(!tracked.ok){
           if(tracked.status===400){
-            rejectedPosition=positionKey;
-            show("Position tracking lost. Start a new game or use FEN analysis.");
-          }else{retry(tracked.error||"Python server unavailable");}
-          return;
-        }
-        nextFen=tracked.fen;
+            // A complete SAN history can reconstruct more than two unseen plies.
+            // Python validates every move and the final observed placement.
+            const recovered=Array.isArray(snapshot.moves)&&snapshot.moves.length
+              ?await request("recover",{moves:snapshot.moves,placement}):null;
+            if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+            if(recovered?.ok)nextFen=recovered.fen;
+            else{
+              rejectedPosition=positionKey;
+              show("Position tracking lost. Open a complete move list or resync with FEN.");
+              return;
+            }
+          }else{retry(tracked.error||"Python server unavailable");return;}
+        }else nextFen=tracked.fen;
       }
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       currentFen=nextFen;lastPlacement=placement;rejectedPosition=null;
@@ -254,9 +263,32 @@
     const hidden=!coachHidden;
     setCoachHidden(hidden);
     // Keep other Chess.com tabs and reloads in the same hidden/visible state.
+    lastToggleAt=Date.now();
     try{chrome.storage?.local?.set?.({coachHidden:hidden});}catch{}
+    // Synchronize the old floating-window dashboard through the local server.
+    void request("control",{hidden});
   }
 
+  // A dashboard-side H key can also change the shared server control.
+  // This lightweight sync does not read the board or request analysis.
+  let controlTimer=null;
+  const syncVisibility=async()=>{
+    if(document.hidden||!eligible()||Date.now()-lastToggleAt<2200)return;
+    const control=await request("control");
+    if(document.hidden)return;
+    if(control?.ok&&typeof control.hidden==="boolean"&&control.hidden!==coachHidden){
+      setCoachHidden(control.hidden);
+      chrome.storage?.local?.set?.({coachHidden:control.hidden});
+    }
+  };
+  const refreshControlWatcher=()=>{
+    clearInterval(controlTimer);controlTimer=null;
+    if(!document.hidden)controlTimer=setInterval(()=>{void syncVisibility();},2000);
+  };
+  document.addEventListener("visibilitychange",refreshControlWatcher);
+  window.addEventListener("pagehide",()=>{clearInterval(controlTimer);controlTimer=null;});
+  window.addEventListener("pageshow",refreshControlWatcher);
+  refreshControlWatcher();
   document.addEventListener("keydown",handleHotkey,true);
   document.addEventListener("visibilitychange",resume);
   window.addEventListener("pagehide",stopWatching);
@@ -274,6 +306,10 @@
   if(chrome.storage?.local?.get)
     chrome.storage.local.get(settings,values=>{
       applySettings(values);
+      if(coachHidden){
+        lastToggleAt=Date.now();
+        void request("control",{hidden:true});
+      }
       if(!coachHidden)resume();
     });
   else resume();

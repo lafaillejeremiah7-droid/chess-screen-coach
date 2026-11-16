@@ -121,3 +121,13 @@ test("unspecified player color stays unknown rather than equaling orientation",(
   assert.equal(result.playerColor,null);
   assert.equal(result.bottomColor,"b");
 });
+
+test('extracts complete SAN history for recovery after several unseen moves',()=>{
+  const history=['e4','e5','Nf3','Nc6','Bb5','a6'];
+  const nodes=history.map((move,i)=>({
+    textContent:move,
+    getAttribute(name){return name==='data-ply'?String(i+1):null;}
+  }));
+  const doc={querySelectorAll(selector){return selector==='[data-ply]'?nodes:[];}};
+  assert.deepEqual(globalThis.ChessCoachBoard.readMoveHistory(doc),history);
+});

@@ -12,14 +12,15 @@ const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 function harness(respond,pathname='/play/computer',options=null){
   let now=0,serial=0,reads=0;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
-  const requests=[];
+  const requests=[],controlRequests=[];
+  const serverState={hidden:false};
   const state={placement:initial,myColor:'w',board:{isConnected:true}};
   const document={
     hidden:false,
     body:{appendChild(element){elements.set(element.id,element);}},
     getElementById(id){return elements.get(id);},
     createElement(){return {setAttribute(){},remove(){elements.delete(this.id);}};},
-    addEventListener(name,callback){events.set(name,callback);}
+    addEventListener(name,callback){const listeners=events.get(name)||[];listeners.push(callback);events.set(name,listeners);}
   };
   const location={pathname,protocol:'https:',hostname:'www.chess.com'};
   function timer(fn,delay,interval=0){
@@ -37,10 +38,14 @@ function harness(respond,pathname='/play/computer',options=null){
     },
     ChessCoachBoard:{initial,snapshot(){reads++;if(state.invalid)throw Error('Animating');if(state.missing)return null;return {...state};}},
     chrome:{runtime:{sendMessage(message,callback){
-      requests.push(message);
+      if(message.action==='control')controlRequests.push(message);
+      else requests.push(message);
+      if(message.action==='control'&&typeof message.hidden==='boolean')
+        serverState.hidden=message.hidden;
       let response=respond?.(message,requests);
       if(response===undefined){
-        if(message.action==='health')response={ok:true,stockfish:true};
+        if(message.action==='control')response={ok:true,hidden:serverState.hidden};
+        else if(message.action==='health')response={ok:true,stockfish:true};
         else if(message.action==='analyze')response={ok:true,instruction:'Move pawn from e2 to e4'};
         else response={ok:true,fen:state.placement+' b KQkq - 0 1'};
       }
@@ -55,13 +60,13 @@ function harness(respond,pathname='/play/computer',options=null){
   }
   vm.runInNewContext(source,context);
   return {
-    state,requests,document,location,
+    state,requests,controlRequests,serverState,document,location,
     get reads(){return reads;},
     get timerCount(){return timers.size;},
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
-    visibility(hidden){document.hidden=hidden;events.get('visibilitychange')();},
-    key(key,overrides={}){events.get('keydown')?.({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
+    visibility(hidden){document.hidden=hidden;for(const listener of events.get('visibilitychange')||[])listener();},
+    key(key,overrides={}){for(const listener of events.get('keydown')||[])listener({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
     async advance(ms){
       const end=now+ms;
       for(let step=0;step<10000;step++){
@@ -160,13 +165,13 @@ test('new games on a reused board restart from the initial position',async()=>{
   assert.equal(h.requests.at(-1).fen,initial+' w KQkq - 0 1');
 });
 
-test('Chess.com human-game route is eligible for engine analysis',async()=>{
+test('human-vs-human Chess.com routes never request engine recommendations',async()=>{
   const h=harness(undefined,'/play/online');
-  await h.advance(0);
-  assert.equal(h.text,'Move pawn from e2 to e4');
-  assert.deepEqual(h.requests.map(x=>x.action),['health','analyze']);
-  h.state.placement=e4;h.mutate();await h.advance(200);
-  assert.equal(h.requests.at(-1).action,'track');
+  await h.advance(4000);
+  assert.equal(h.text,undefined);
+  assert.deepEqual(h.requests,[]);
+  h.key('h');
+  assert.equal(h.serverState.hidden,true);
 });
 
 test('Chess.com analysis route remains eligible',async()=>{
@@ -244,7 +249,7 @@ test('optional analysis diagnostics render on practice pages only',async()=>{
   assert.equal(practice.requests.at(-1).seconds,1);
   const other=harness(respond,'/play/online',settings);
   await other.advance(0);
-  assert.equal(other.text,'Move pawn from e2 to e4');
+  assert.equal(other.text,undefined);
 });
 test('transient malformed board recovers without another mutation event',async()=>{
   const h=harness();await h.advance(0);
@@ -296,7 +301,7 @@ test('H hides the entire coach and pauses observation and engine requests until 
   const count=h.requests.length,reads=h.reads;
   h.key('h');
   assert.equal(h.text,undefined);
-  assert.equal(h.timerCount,0);
+  assert.equal(h.timerCount,1); // Only the control-state sync timer remains.
   h.state.placement=e4;h.mutate();await h.advance(12000);
   assert.equal(h.requests.length,count);
   assert.equal(h.reads,reads);
@@ -327,7 +332,7 @@ test('a pending engine reply never reappears after H hides the coach',async()=>{
   finish({ok:true,instruction:'Stale best move'});
   await flush();
   assert.equal(h.text,undefined);
-  assert.equal(h.timerCount,0);
+  assert.equal(h.timerCount,1); // No board watching or engine polling.
 });
 
 test('persisted hidden setting blocks initial board reads and engine requests',async()=>{
@@ -337,5 +342,39 @@ test('persisted hidden setting blocks initial board reads and engine requests',a
   assert.equal(h.requests.length,0);
   h.key('h');
   await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('history resync is attempted after a rejected multi-move transition',async()=>{
+  const h=harness(message=>{
+    if(message.action==='track')return {ok:false,status:400,error:'Too many moves'};
+    if(message.action==='recover')return {ok:true,fen:e5+' w KQkq - 0 2'};
+  });
+  await h.advance(0);
+  h.state.placement=e5;h.state.moves=['e4','e5'];
+  h.mutate();await h.advance(200);
+  assert.equal(h.requests.at(-1).action,'analyze');
+  assert.ok(h.requests.some(m=>m.action==='recover'));
+});
+
+test('H control updates local server even when the move overlay is removed',async()=>{
+  const h=harness();await h.advance(0);
+  h.key('h');
+  await h.advance(0);
+  assert.equal(h.controlRequests.at(-1).hidden,true);
+  h.key('h');
+  await h.advance(0);
+  assert.equal(h.controlRequests.at(-1).hidden,false);
+});
+
+test('visibility changes made by the dashboard propagate to the extension',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.serverState.hidden=true;
+  await h.advance(4100);
+  assert.equal(h.text,undefined);
+  assert.equal(h.requests.filter(x=>x.action==='analyze').length,1);
+  h.serverState.hidden=false;
+  await h.advance(2200);
   assert.equal(h.text,'Move pawn from e2 to e4');
 });

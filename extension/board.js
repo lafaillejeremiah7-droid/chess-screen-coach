@@ -115,6 +115,35 @@
     return null;
   }
 
+
+  function readMoveHistory(doc){
+    // Prefer a complete, ordered list with explicit plies; never invent moves.
+    for(const selector of ["[data-ply]",".vertical-move-list .node",".move-list .node",".move-text-component"]){
+      let nodes;
+      try{nodes=[...doc.querySelectorAll(selector)];}catch{continue;}
+      if(!nodes.length||nodes.length>400)continue;
+      if(selector==="[data-ply]"){
+        const indexed=nodes.map(n=>({ply:Number(n.getAttribute?.("data-ply")),node:n}))
+          .filter(x=>Number.isInteger(x.ply)&&x.ply>=1);
+        if(indexed.length!==nodes.length)continue;
+        indexed.sort((a,b)=>a.ply-b.ply);
+        if(indexed[0].ply!==1||indexed.some((x,i)=>x.ply!==i+1))continue;
+        nodes=indexed.map(x=>x.node);
+      }
+      const moves=[];
+      for(const node of nodes){
+        const raw=(node.textContent||node.innerText||"").trim();
+        const value=raw.replace(/^\s*\d+\s*\.(?:\.\.)?\s*/,"").replace(/[!?]+/g,"").trim();
+        if(!/^(?:[O0]-[O0](?:-[O0])?|[a-h][1-8][a-h][1-8][qrbn]?|[KQRBN]?[a-h1-8]{0,2}x?[a-h][1-8](?:=[QRBN])?)[+#]?$/.test(value)){
+          moves.length=0;break;
+        }
+        moves.push(value.replace(/0/g,"O"));
+      }
+      if(moves.length>=1)return moves;
+    }
+    return [];
+  }
+
   function snapshot(doc){
     const board=findBoard(doc);
     if(!board)return null;
@@ -124,8 +153,8 @@
     const candidate=board.getAttribute?.("data-fen")||board.getAttribute?.("fen")||"";
     const parts=candidate.trim().split(/\s+/);
     const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?candidate.trim():null;
-    return {board,placement,bottomColor,myColor:bottomColor,playerColor:declaredPlayerColor(board),fen};
+    return {board,placement,bottomColor,myColor:bottomColor,playerColor:declaredPlayerColor(board),fen,moves:readMoveHistory(doc)};
   }
 
-  root.ChessCoachBoard={placementFromClasses,placementFromNodes,findBoard,snapshot,initial};
+  root.ChessCoachBoard={placementFromClasses,placementFromNodes,findBoard,snapshot,readMoveHistory,initial};
 })(globalThis);
