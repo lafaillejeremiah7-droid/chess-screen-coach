@@ -9,7 +9,7 @@ const e4='rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
 const e5='rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR';
 const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 
-function harness(respond,pathname='/play/computer'){
+function harness(respond,pathname='/play/computer',options=null){
   let now=0,serial=0,reads=0;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
   const requests=[];
@@ -47,6 +47,12 @@ function harness(respond,pathname='/play/computer'){
       Promise.resolve(response).then(callback);
     }}}
   };
+  if(options){
+    context.chrome.storage={
+      local:{get(_defaults,callback){callback(options);}},
+      onChanged:{addListener(){}}
+    };
+  }
   vm.runInNewContext(source,context);
   return {
     state,requests,document,location,
@@ -201,14 +207,37 @@ test('a verified FEN attribute allows automatic mid-position recovery',async()=>
   assert.equal(h.requests.at(-1).fen,h.state.fen);
   assert.equal(h.text,'Move pawn from e2 to e4');
 });
-test('flipping an existing board keeps position history',async()=>{
+test('board flip never changes the chosen player color',async()=>{
   const h=harness();
   await h.advance(0);
   h.state.placement=e4;h.mutate();await h.advance(200);
   assert.equal(h.text,'Waiting for opponent');
+  const count=h.requests.filter(x=>x.action==='analyze').length;
   h.state.myColor='b';h.mutate();await h.advance(200);
+  assert.equal(h.text,'Waiting for opponent');
+  assert.equal(h.requests.filter(x=>x.action==='analyze').length,count);
+});
+test('explicit Black side overrides White-at-bottom orientation',async()=>{
+  const h=harness(undefined,'/play/computer',{playerSide:'b',thinkSeconds:0.5,showDetails:false});
+  await h.advance(0);
+  assert.equal(h.text,'Waiting for opponent');
+  h.state.placement=e4;h.mutate();await h.advance(200);
   assert.equal(h.requests.at(-1).action,'analyze');
+  assert.equal(h.requests.at(-1).seconds,0.5);
   assert.equal(h.requests.at(-1).fen,e4+' b KQkq - 0 1');
+});
+test('optional analysis diagnostics render on practice pages only',async()=>{
+  const respond=m=>m.action==='analyze'
+    ?{ok:true,instruction:'Move pawn from e2 to e4',reason:'Occupies the center.',depth:17,score_cp:45}:undefined;
+  const settings={playerSide:'w',thinkSeconds:1,showDetails:true};
+  const practice=harness(respond,'/play/computer',settings);
+  await practice.advance(0);
+  assert.match(practice.text,/Depth 17/);
+  assert.match(practice.text,/Eval 0.45/);
+  assert.equal(practice.requests.at(-1).seconds,1);
+  const other=harness(respond,'/play/online',settings);
+  await other.advance(0);
+  assert.equal(other.text,'Move pawn from e2 to e4');
 });
 test('transient malformed board recovers without another mutation event',async()=>{
   const h=harness();await h.advance(0);
