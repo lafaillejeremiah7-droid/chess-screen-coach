@@ -109,13 +109,13 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
             self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
-            self.assertEqual(self.engine.play.call_count, 3)
+            self.assertEqual(self.engine.analysis.call_count, 3)
 
     def test_busy_engine_does_not_queue_more_searches(self):
         with server.ENGINE_LOCK:
             with self.assertRaisesRegex(RuntimeError, "Engine busy"):
                 server.analyze_fen(chess.Board().fen())
-        self.engine.play.assert_not_called()
+        self.engine.analysis.assert_not_called()
 
     def test_engine_failure_releases_lock_and_can_be_retried(self):
         self.engine.analysis.side_effect = RuntimeError("Temporary engine failure")
@@ -158,7 +158,7 @@ class AdjustableAnalysisTests(unittest.TestCase):
         fen = chess.Board().fen()
         answer = server.analyze_fen(fen)
         self.assertEqual(answer["seconds"], 1.0)
-        self.assertEqual(self.engine.play.call_args.args[1].time, 1.0)
+        self.assertEqual(self.engine.analysis.call_args.args[1].time, 1.0)
         self.assertIn((fen, 1.0), server.ANALYSIS_CACHE)
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
@@ -169,14 +169,14 @@ class AdjustableAnalysisTests(unittest.TestCase):
         self.assertEqual(result["score_cp"], 70)
         self.assertEqual(result["mate_in"], None)
         self.assertTrue(result["reason"])
-        self.assertAlmostEqual(self.engine.play.call_args.args[1].time, 1.0)
+        self.assertAlmostEqual(self.engine.analysis.call_args.args[1].time, 1.0)
 
     def test_cache_separates_search_budgets(self):
         fen=chess.Board().fen()
         server.analyze_fen(fen,0.2)
         server.analyze_fen(fen,1)
         server.analyze_fen(fen,0.2)
-        self.assertEqual(self.engine.play.call_count,2)
+        self.assertEqual(self.engine.analysis.call_count,2)
         self.assertIn((fen,0.2),server.ANALYSIS_CACHE)
         self.assertIn((fen,1.0),server.ANALYSIS_CACHE)
 
@@ -185,7 +185,7 @@ class AdjustableAnalysisTests(unittest.TestCase):
             with self.subTest(seconds=seconds):
                 with self.assertRaises(ValueError):
                     server.analyze_fen(chess.Board().fen(),seconds)
-        self.engine.play.assert_not_called()
+        self.engine.analysis.assert_not_called()
 
     def test_move_reason_uses_verifiable_board_features(self):
         board=chess.Board("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
