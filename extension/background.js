@@ -3,8 +3,8 @@
 function permitted(urlString){
   try{
     const url=new URL(urlString);
-    return url.protocol==="https:"&&url.hostname==="www.chess.com"&&
-      (/^\/play\/computer(?:\/|$)/.test(url.pathname)||/^\/analysis(?:\/|$)/.test(url.pathname));
+    return url.protocol==="https:"&&
+      (url.hostname==="www.chess.com"||url.hostname==="chess.com");
   }catch{return false;}
 }
 chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
