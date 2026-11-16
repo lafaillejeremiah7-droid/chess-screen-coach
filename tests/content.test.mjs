@@ -218,11 +218,38 @@ test('transient malformed board recovers without another mutation event',async()
   await h.advance(450);
   assert.equal(h.text,'Move pawn from e2 to e4');
 });
-test('overlay is removed when no board is present',async()=>{
+test('temporary blank board hides the old move, then recovers',async()=>{
   const h=harness();await h.advance(0);
   h.state.missing=true;h.mutate();await h.advance(200);
-  assert.equal(h.text,undefined);
+  assert.match(h.text,/unavailable; waiting/);
   h.state.missing=false;
   await h.advance(4000);
   assert.equal(h.text,'Move pawn from e2 to e4');
+});
+test('replaced board preserves a midgame position without restarting',async()=>{
+  const h=harness();await h.advance(0);
+  h.state.placement=e4;h.mutate();await h.advance(200);
+  const tracked=h.requests.filter(x=>x.action==='track');
+  assert.equal(tracked.length,1);
+  assert.equal(h.text,'Waiting for opponent');
+  h.state.missing=true;h.mutate();await h.advance(200);
+  assert.match(h.text,/Chessboard unavailable/);
+  h.state.board={isConnected:true}; // Chess.com re-renders the board node
+  h.state.missing=false;
+  await h.advance(4000);
+  assert.equal(h.text,'Waiting for opponent');
+  assert.equal(h.requests.filter(x=>x.action==='track').length,1);
+  h.state.placement=e5;h.mutate();await h.advance(200);
+  assert.equal(h.requests.at(-1).action,'track');
+  assert.equal(h.requests.at(-1).previous,e4+' b KQkq - 0 1');
+});
+test('replaced board on the same turn reanalyzes verified position',async()=>{
+  const h=harness();await h.advance(0);
+  const first=h.requests.filter(x=>x.action==='analyze').length;
+  h.state.missing=true;h.mutate();await h.advance(200);
+  h.state.board={isConnected:true};
+  h.state.missing=false;
+  await h.advance(4000);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+  assert.ok(h.requests.filter(x=>x.action==='analyze').length>first);
 });
