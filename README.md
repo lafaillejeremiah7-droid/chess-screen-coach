@@ -1,5 +1,34 @@
 # Python Chess Screen Coach
 
+> **v0.5.0 candidate branch — not yet installed on your Chromebook.** The
+> default `main` branch remains at v0.4.2 until device checks are complete.
+> The branch adds configurable Stockfish search time, diagnostic output on
+> practice/analysis pages, and color selection independent of board orientation.
+> This is not a new chess engine; it uses your locally installed Stockfish.
+
+### v0.5.0 evaluation workflow
+
+1. On the candidate branch, open `chrome://extensions` → Chess Study Coach
+   → **Details** → **Extension options**. Explicitly choose White or Black
+   if the bottom player and your color are not the same. The Auto setting
+   remembers the first inferred color and does not switch when the board flips.
+   Explicit `data-player-color` metadata takes priority when Auto is chosen.
+2. Choose a bounded analysis time: **0.2, 0.5, 1, or 2 seconds**. Default 0.2
+   retains the older Chromebook CPU budget. Search time is passed through the
+   extension and validated by Python; cached results distinguish budgets.
+3. Optionally enable factual analysis details on computer/practice or personal
+   analysis pages: check/capture/castle/mate when applicable, reported search
+   depth, and a side-to-move evaluation. No invented strategic narrative.
+4. Automated tests run on this branch and benchmark at least **110** generated
+   positions (40 opening, 40 middlegame, 30 endgame) using Stockfish. The
+   report includes match rate and estimated centipawn loss versus longer
+   same-engine analysis; it is **not** a playing Elo estimate, proof of optimal
+   moves, or a measurement of your Chromebook's performance.
+5. Before installing this candidate, verify ChromeOS CPU usage, actual player
+   color, board parsing, and analysis results in a fresh **bot** game. Your
+   existing 0.4.2 installation is unchanged by changes to this branch.
+
+
 ## Recommended on Chromebook: no-screen-share Chrome extension
 
 **This avoids the screen-sharing video stream.** The extension reads chess piece
