@@ -98,14 +98,18 @@
       }
       badSnapshots=0;
       if(!snapshot){
-        // Do not leave a stale instruction on a page with no chessboard.
-        document.getElementById("chess-study-no-share-overlay")?.remove();
-        lastText="";settledText=null;lastPlacement=null;analysisPending=true;
+        // A transient empty/black board must never erase the last verified FEN.
+        // Never show the previous move as if it were still current.
+        settledText=null;analysisPending=true;
+        show("Chessboard unavailable; waiting for it to return.");
         return;
       }
       if(snapshot.board!==currentBoard){
-        currentBoard=snapshot.board;currentFen=null;lastPlacement=null;
-        lastColor=snapshot.myColor;analysisPending=false;rejectedPosition=null;settledText=null;
+        // A site re-render can replace the element without changing the game.
+        // Retain the FEN and verify the next placement by legal-move tracking.
+        currentBoard=snapshot.board;
+        lastColor=snapshot.myColor;
+        analysisPending=true;rejectedPosition=null;settledText=null;
         watchBoard(currentBoard);
       }
       if(snapshot.myColor!==lastColor){
