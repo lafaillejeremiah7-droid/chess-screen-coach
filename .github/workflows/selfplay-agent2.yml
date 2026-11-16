@@ -1,0 +1,30 @@
+name: Self-play adaptation vs frozen Agent 2
+
+on:
+  push:
+    branches: [experiment/selfplay-learning-vs-agent2]
+  workflow_dispatch:
+
+jobs:
+  train-and-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Validate experiment code
+        run: python -m py_compile scripts/selfplay_agent2.py
+      - name: Train Agent 1 against itself and compare to frozen Agent 2
+        run: python -u scripts/selfplay_agent2.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selfplay-agent1-vs-agent2
+          path: |
+            selfplay_agent2_results.json
+            selfplay_agent2_games.pgn
+          if-no-files-found: warn
