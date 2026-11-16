@@ -249,6 +249,33 @@ def advance_position(previous: str, observed_placement: str) -> dict:
     raise ValueError("Cannot track position within two moves; resync required")
 
 
+
+def recover_from_history(moves: list, placement: str) -> dict:
+    """Replay a complete SAN/UCI move list and verify against the observed board."""
+    if not isinstance(moves, list) or not 1 <= len(moves) <= 400 or any(
+        not isinstance(item, str) or len(item) > 14 for item in moves
+    ):
+        raise ValueError("Valid complete move history required")
+    if not isinstance(placement, str) or len(placement) > 90:
+        raise ValueError("Valid board placement required")
+    board = chess.Board()
+    try:
+        for item in moves:
+            token = item.strip()
+            if not token:
+                raise ValueError("Empty history move")
+            try:
+                board.push_san(token)
+            except ValueError:
+                board.push_uci(token)
+        target = chess.BaseBoard(placement)
+    except (ValueError, AssertionError) as exc:
+        raise ValueError("History contains an illegal or malformed move") from exc
+    if placement_key(board) != placement_key(target):
+        raise ValueError("Move history does not match the observed board")
+    return {"fen": board.fen(), "recovered_moves": len(moves)}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         # No image content or chess positions are logged.
@@ -266,7 +293,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         endpoint = urlparse(self.path).path
-        if endpoint not in ("/api/analyze", "/api/track", "/api/control", "/api/training/evaluate"):
+        if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -279,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = coach_control(data.get("hidden"))
             elif endpoint == "/api/track":
                 result = advance_position(data.get("previous"), data.get("placement"))
+            elif endpoint == "/api/recover":
+                result = recover_from_history(data.get("moves"), data.get("placement"))
             elif endpoint == "/api/training/evaluate":
                 from training import evaluate_attempt
                 result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
