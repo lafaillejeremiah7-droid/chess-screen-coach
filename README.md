@@ -1,14 +1,14 @@
-> **v0.6.0:** The **H** key now hides the Chrome extension overlay and pauses its analysis, and also controls the older dashboard's floating move window through the Python server. Move overlays are compact. If the board advances by more than two half-moves while paused, the extension can recover from a *complete, validated* SAN move history or a matching FEN attribute; without one it stops safely and requests resynchronization. 
+> **v0.6.1:** The **H** key now hides the Chrome extension overlay and pauses its analysis, and also controls the older dashboard's floating move window through the Python server. Move overlays are compact. If the board advances by more than two half-moves while paused, the extension can recover from a *complete, validated* SAN move history or a matching FEN attribute; without one it stops safely and requests resynchronization. 
 >
 > **Adaptive chess practice:** Open **http://127.0.0.1:8765/training.html** to run a 100-position, 10-second-per-position session. You must predict a move before seeing Stockfish's recommendation. Feedback includes the engine move, approximate centipawn loss using equal one-second root searches, and factual explanations. Adaptive weakness scheduling and spaced repetition persist in your browser's local storage. Ensure the local Python server uses Stockfish 19. The exercise bank is generated offline from opening sequences and endgames, not a curated professional puzzle database.
 >
-> **Fair play:** The Chess.com extension does not provide engine recommendations on live human-vs-human routes. The H shortcut is still available as a visibility control. The standalone dashboard relies on your using it only for permitted analysis.
+> **v0.6.1 route behavior:** The extension no longer has a route-based analysis restriction. Its H-key visibility toggle and local-engine bridge behave consistently across Chess.com pages. Engine assistance in competitive human games can violate the site's fair-play rules.
 
 # Python Chess Screen Coach
 
 **Stockfish 19 upgrade (experimental branch):** [Installation, verification and A/B engine testing](docs/stockfish19.md). The pinned Stockfish 19 binary is installed locally; GitHub updates alone do not install software on your Chromebook. Existing one-second settings stay unchanged.
 
-> **v0.6.0 extension controls.** Press **H** on a Chess.com tab to hide or resume the entire coach. Hiding removes the overlay and stops board monitoring and new engine requests until resumed. The hidden state is saved across tabs and reloads. The move display is smaller. Default analysis time remains **1 second**. The
+> **v0.6.1 extension controls.** Press **H** on a Chess.com tab to hide or resume the entire coach. Hiding removes the overlay and stops board monitoring and new engine requests until resumed. The hidden state is saved across tabs and reloads. The move display is smaller. Default analysis time remains **1 second**. The
 > Python server, Chrome extension, and extension settings agree on this default.
 > Existing user-selected times remain in effect until changed manually.
 > The app still uses locally installed Stockfish. Chromebook performance and
@@ -93,7 +93,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.0**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.6.1**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 

@@ -165,13 +165,19 @@ test('new games on a reused board restart from the initial position',async()=>{
   assert.equal(h.requests.at(-1).fen,initial+' w KQkq - 0 1');
 });
 
-test('human-vs-human Chess.com routes never request engine recommendations',async()=>{
-  const h=harness(undefined,'/play/online');
-  await h.advance(4000);
-  assert.equal(h.text,undefined);
-  assert.deepEqual(h.requests,[]);
-  h.key('h');
-  assert.equal(h.serverState.hidden,true);
+test('all supported Chess.com routes share the same engine and H-key controls',async()=>{
+  for(const route of ['/play/online','/game/live/123','/analysis','/play/computer']){
+    const h=harness(undefined,route);
+    await h.advance(0);
+    assert.equal(h.text,'Move pawn from e2 to e4');
+    assert.deepEqual(h.requests.map(x=>x.action),['health','analyze']);
+    h.key('h');
+    assert.equal(h.text,undefined);
+    assert.equal(h.serverState.hidden,true);
+    h.key('h');
+    await h.advance(0);
+    assert.equal(h.text,'Move pawn from e2 to e4');
+  }
 });
 
 test('Chess.com analysis route remains eligible',async()=>{
@@ -249,7 +255,7 @@ test('optional analysis diagnostics render on practice pages only',async()=>{
   assert.equal(practice.requests.at(-1).seconds,1);
   const other=harness(respond,'/play/online',settings);
   await other.advance(0);
-  assert.equal(other.text,undefined);
+  assert.equal(other.text,'Move pawn from e2 to e4');
 });
 test('transient malformed board recovers without another mutation event',async()=>{
   const h=harness();await h.advance(0);
