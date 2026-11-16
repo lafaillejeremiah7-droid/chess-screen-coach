@@ -1,7 +1,8 @@
 """One-second production-budget self-play contest using trained vs frozen Stockfish."""
-import json,statistics,time
+import json,statistics,time,sys
 from pathlib import Path
 import chess,chess.engine
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import server
 import selfplay_agent2 as s
 
