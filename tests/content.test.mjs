@@ -366,3 +366,15 @@ test('H control updates local server even when the move overlay is removed',asyn
   await h.advance(0);
   assert.equal(h.controlRequests.at(-1).hidden,false);
 });
+
+test('visibility changes made by the dashboard propagate to the extension',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.serverState.hidden=true;
+  await h.advance(4100);
+  assert.equal(h.text,undefined);
+  assert.equal(h.requests.filter(x=>x.action==='analyze').length,1);
+  h.serverState.hidden=false;
+  await h.advance(2200);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
