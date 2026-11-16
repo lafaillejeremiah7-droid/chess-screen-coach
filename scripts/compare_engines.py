@@ -68,16 +68,19 @@ def play_game(baseline: chess.engine.SimpleEngine,
 
 
 def run_match(baseline_path: str, candidate_path: str, games: int,
-              seconds: float, max_plies: int, seed: int) -> dict:
+              seconds: float, max_plies: int, seed: int,
+              pair_offset: int = 0) -> dict:
     if games < 2 or games % 2:
         raise ValueError("Games must be a positive even number (paired colors)")
     if seconds <= 0 or max_plies < 2:
         raise ValueError("Time and maximum plies must be positive")
+    if pair_offset < 0:
+        raise ValueError("Pair offset must be nonnegative")
     if Path(baseline_path).resolve() == Path(candidate_path).resolve():
         print("WARNING: Candidate and baseline paths are identical; this is only a pipeline smoke test.")
-    rng = random.Random(seed)
-    openings = [OPENINGS[i % len(OPENINGS)] for i in range(games // 2)]
-    rng.shuffle(openings)
+    # Each independently scheduled shard samples a distinct range of pair IDs.
+    # A global pair ID maps deterministically to one of the shared starting lines.
+    openings = [OPENINGS[(pair_offset + i) % len(OPENINGS)] for i in range(games // 2)]
     records = []
     with chess.engine.SimpleEngine.popen_uci(baseline_path) as baseline:
         with chess.engine.SimpleEngine.popen_uci(candidate_path) as candidate:
@@ -88,7 +91,8 @@ def run_match(baseline_path: str, candidate_path: str, games: int,
             for pair, opening in enumerate(openings):
                 for candidate_white in (True, False):
                     item = play_game(baseline, candidate, opening,
-                                     candidate_white, seconds, max_plies, pair * 2 + int(not candidate_white))
+                                     candidate_white, seconds, max_plies,
+                                     (pair_offset + pair) * 2 + int(not candidate_white))
                     records.append(item)
                     print(f"Game {len(records)}/{games}: {item['status']}", flush=True)
     scored = [x["candidate_points"] for x in records if x["candidate_points"] is not None]
@@ -96,7 +100,8 @@ def run_match(baseline_path: str, candidate_path: str, games: int,
         "baseline": baseline_name, "baseline_path": str(Path(baseline_path).resolve()),
         "candidate": candidate_name, "candidate_path": str(Path(candidate_path).resolve()),
         "seconds_per_move": seconds, "max_plies_after_opening": max_plies,
-        "seed": seed, "total_games": len(records), "scored_games": len(scored),
+        "seed": seed, "pair_offset": pair_offset,
+        "total_games": len(records), "scored_games": len(scored),
         "incomplete_games": len(records) - len(scored),
         "candidate_wins": sum(x == 1 for x in scored),
         "draws": sum(x == 0.5 for x in scored),
@@ -118,10 +123,12 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=1.0)
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20261116)
+    parser.add_argument("--pair-offset", type=int, default=0,
+                        help="Starting paired-game index for deterministic sharding")
     parser.add_argument("--output", default="engine_ab_report.json")
     args = parser.parse_args()
     report = run_match(args.baseline, args.candidate, args.games,
-                       args.seconds, args.max_plies, args.seed)
+                       args.seconds, args.max_plies, args.seed, args.pair_offset)
     Path(args.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("SUMMARY", json.dumps({k: v for k, v in report.items() if k != "games"}))
 

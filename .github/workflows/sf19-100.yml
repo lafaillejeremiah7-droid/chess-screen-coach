@@ -1,0 +1,86 @@
+name: Stockfish 19 check-LMR 100-game match (1s/move)
+
+on:
+  push:
+    branches: [experiment/sf19-check-aware-lmr]
+    paths:
+      - scripts/compare_engines.py
+      - scripts/aggregate_sf19_100.py
+      - tests/test_aggregate_sf19_100.py
+      - .github/workflows/sf19-100.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sf19-100-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  play:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Check 100-game score aggregation
+        run: python -m unittest discover -s tests -p 'test_aggregate_sf19_100.py'
+      - name: Compile unchanged and modified Stockfish 19 (same CPU architecture)
+        run: python scripts/build_sf19_check_lmr.py --jobs 2
+      - name: Play ten 1s-per-move games (five swapped-color opening pairs)
+        run: |
+          mkdir -p reports
+          python scripts/compare_engines.py \
+            --baseline .stockfish/research/stockfish19-baseline \
+            --candidate .stockfish/research/stockfish19-check-lmr \
+            --games 10 --seconds 1 --max-plies 300 \
+            --pair-offset $((${{ matrix.shard }} * 5)) \
+            --output reports/shard-${{ matrix.shard }}.json
+      - name: Save independent shard report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf19-100-shard-${{ matrix.shard }}
+          path: reports/shard-${{ matrix.shard }}.json
+          retention-days: 30
+          if-no-files-found: error
+
+  summarize:
+    needs: play
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sf19-100-shard-*
+          path: reports
+          merge-multiple: true
+      - name: Aggregate exactly 100 games and write final scoreboard
+        run: |
+          python scripts/aggregate_sf19_100.py --directory reports --output sf19_100_summary.json
+          python - <<'PY'
+          import json,os
+          x=json.load(open('sf19_100_summary.json'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## Stockfish 19: 100 games at 1 second per move\n\n')
+              out.write(f"**Candidate wins:** {x['candidate_wins']} | **Draws:** {x['draws']} | **Baseline wins:** {x['baseline_wins']}\n\n")
+              out.write(f"**Scored games:** {x['scored_games']} / {x['total_games']} | **Max-ply incomplete:** {x['incomplete_games']}\n\n")
+              out.write(f"**Candidate score:** {x['candidate_score_fraction']}\n\n")
+              out.write('This is an exploratory sample, not proof of stronger Elo.\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sf19-100-games-final
+          path: sf19_100_summary.json
+          retention-days: 90
