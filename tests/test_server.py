@@ -258,3 +258,51 @@ class PauseCancellationTests(unittest.TestCase):
             with server.CONTROL_LOCK:
                 server.ACTIVE_ANALYSIS=None
             server.coach_control(False)
+
+
+
+class SparringTests(unittest.TestCase):
+    def test_practice_starts_with_white_and_20_legal_moves(self):
+        from sparring import initial_position
+        state=initial_position()
+        self.assertEqual(len(state["legal_moves"]),20)
+        self.assertTrue(state["fen"].startswith(chess.STARTING_BOARD_FEN))
+        self.assertFalse(state["finished"])
+
+    def test_2000_elo_configured_on_separate_engine(self):
+        from sparring import play_practice_turn
+        fake=Mock()
+        fake.id={"name":"Stockfish 19"}
+        fake.play.return_value=chess.engine.PlayResult(chess.Move.from_uci("e7e5"),None)
+        state=play_practice_turn(chess.Board().fen(),"e2e4",2000,
+                                 engine_path="/path/to/stockfish",engine_factory=lambda _:fake)
+        fake.configure.assert_called_once_with({
+            "Threads":1,"Hash":16,"UCI_LimitStrength":True,"UCI_Elo":2000
+        })
+        fake.quit.assert_called_once()
+        self.assertEqual(state["human_san"],"e4")
+        self.assertEqual(state["engine_san"],"e5")
+        self.assertEqual(state["fen"].split(" ")[1],"w")
+        self.assertIn("g1f3",state["legal_moves"])
+
+    def test_rejects_illegal_moves_and_out_of_range_elo(self):
+        from sparring import play_practice_turn
+        for elo in (0,1000,5000,"2000",True,1320.5,None):
+            with self.subTest(elo=elo):
+                with self.assertRaises(ValueError):
+                    play_practice_turn(chess.Board().fen(),"e2e4",elo)
+        with self.assertRaisesRegex(ValueError,"Illegal White move"):
+            play_practice_turn(chess.Board().fen(),"e2e5",2000)
+
+    def test_rejects_black_turn_and_invalid_engine_identity(self):
+        from sparring import play_practice_turn
+        black=chess.Board()
+        black.push_uci("e2e4")
+        with self.assertRaisesRegex(ValueError,"White to play"):
+            play_practice_turn(black.fen(),"e7e5",2000)
+        fake=Mock()
+        fake.id={"name":"Stockfish 17"}
+        with self.assertRaisesRegex(RuntimeError,"Stockfish 19"):
+            play_practice_turn(chess.Board().fen(),"e2e4",2000,
+                               engine_path="unused",engine_factory=lambda _:fake)
+        fake.quit.assert_called_once()

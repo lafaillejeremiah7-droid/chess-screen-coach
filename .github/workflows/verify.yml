@@ -24,6 +24,7 @@ jobs:
           node --check extension/background.js
           node --check src/app.js
           node --check src/training.js
+          node --check src/sparring.js
           npm test
       - name: Install Python chess dependency
         run: pip install -r requirements.txt
