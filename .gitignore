@@ -2,3 +2,5 @@ node_modules/
 dist/
 public/engine/
 .DS_Store
+.stockfish/
+engine_ab_report.json
