@@ -1,6 +1,6 @@
 """Version-guard tests that avoid treating an older Stockfish as ready."""
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, MagicMock
 
 import chess
 import chess.engine
@@ -17,20 +17,20 @@ class Stockfish19ReadinessTests(unittest.TestCase):
                 self.assertFalse(server.is_stockfish19_name(bad))
 
     def test_preflight_rejects_old_engine(self):
-        fake = Mock()
+        fake = MagicMock()
         fake.id = {"name": "Stockfish 18"}
-        fake.__enter__ = Mock(return_value=fake)
-        fake.__exit__ = Mock(return_value=None)
+        fake.__enter__.return_value = fake
+        fake.__exit__.return_value = None
         with patch("scripts.check_stockfish19_ready.chess.engine.SimpleEngine.popen_uci", return_value=fake):
             with self.assertRaisesRegex(RuntimeError, "expected Stockfish 19"):
                 check_ready("/fake/stockfish18")
         fake.play.assert_not_called()
 
     def test_preflight_reports_legal_move(self):
-        fake = Mock()
+        fake = MagicMock()
         fake.id = {"name": "Stockfish 19"}
-        fake.__enter__ = Mock(return_value=fake)
-        fake.__exit__ = Mock(return_value=None)
+        fake.__enter__.return_value = fake
+        fake.__exit__.return_value = None
         fake.play.return_value = chess.engine.PlayResult(
             chess.Move.from_uci("e2e4"), None, info={"depth": 13, "nodes": 16000})
         with patch("scripts.check_stockfish19_ready.chess.engine.SimpleEngine.popen_uci", return_value=fake):
