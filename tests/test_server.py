@@ -110,7 +110,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 1.0, 1400), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.analysis.call_count, 3)
 
     def test_main_coach_recommends_weaker_selected_move_not_top_pv(self):
@@ -172,7 +172,7 @@ class AdjustableAnalysisTests(unittest.TestCase):
         answer = server.analyze_fen(fen)
         self.assertEqual(answer["seconds"], 1.0)
         self.assertEqual(self.engine.analysis.call_args.args[1].time, 1.0)
-        self.assertIn((fen, 1.0), server.ANALYSIS_CACHE)
+        self.assertIn((fen, 1.0, 1400), server.ANALYSIS_CACHE)
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
         result=server.analyze_fen(chess.Board().fen(), 1)
@@ -190,8 +190,33 @@ class AdjustableAnalysisTests(unittest.TestCase):
         server.analyze_fen(fen,1)
         server.analyze_fen(fen,0.2)
         self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,0.2),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0),server.ANALYSIS_CACHE)
+        self.assertIn((fen,0.2,1400),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,1400),server.ANALYSIS_CACHE)
+
+    def test_main_strength_changes_config_and_separates_cache(self):
+        fen=chess.Board().fen()
+        default=server.analyze_fen(fen,elo=1400)
+        stronger=server.analyze_fen(fen,elo=2200)
+        full=server.analyze_fen(fen,elo="full")
+        self.assertEqual((default["elo"],stronger["elo"],full["elo"]),
+                         (1400,2200,"full"))
+        self.assertEqual(self.engine.analysis.call_count,3)
+        self.assertIn((fen,1.0,1400),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,2200),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,"full"),server.ANALYSIS_CACHE)
+        self.assertEqual(self.engine.configure.call_args_list[-2].args[0],
+                         {"UCI_LimitStrength":True,"UCI_Elo":2200})
+        self.assertEqual(self.engine.configure.call_args_list[-1].args[0],
+                         {"UCI_LimitStrength":False})
+        server.analyze_fen(fen,elo=2200)
+        self.assertEqual(self.engine.analysis.call_count,3)
+
+    def test_rejects_invalid_main_strength(self):
+        for elo in (0,1000,3191,"2200",True,1320.5,[],{}):
+            with self.subTest(elo=elo):
+                with self.assertRaises(ValueError):
+                    server.analyze_fen(chess.Board().fen(),elo=elo)
+        self.engine.analysis.assert_not_called()
 
     def test_rejects_invalid_search_times(self):
         for seconds in (0,0.1,0.7,5,True,"1",float("nan")):
