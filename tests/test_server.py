@@ -110,7 +110,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 1.0, 1400), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.analysis.call_count, 3)
 
     def test_main_coach_recommends_weaker_selected_move_not_top_pv(self):
@@ -172,7 +172,37 @@ class AdjustableAnalysisTests(unittest.TestCase):
         answer = server.analyze_fen(fen)
         self.assertEqual(answer["seconds"], 1.0)
         self.assertEqual(self.engine.analysis.call_args.args[1].time, 1.0)
-        self.assertIn((fen, 1.0), server.ANALYSIS_CACHE)
+        self.assertIn((fen, 1.0, 1400), server.ANALYSIS_CACHE)
+
+    def test_main_agent_strength_changes_without_server_restart(self):
+        fen=chess.Board().fen()
+        first=server.analyze_fen(fen,elo=1400)
+        raised=server.analyze_fen(fen,elo=1650)
+        self.assertEqual(first["elo"],1400)
+        self.assertEqual(raised["elo"],1650)
+        self.assertEqual(self.engine.analysis.call_count,2)
+        self.assertEqual(self.engine.configure.call_args_list[-1].args[0],
+                         {"UCI_LimitStrength":True,"UCI_Elo":1650})
+        # Repeating the same strength hits its own cache.
+        server.analyze_fen(fen,elo=1650)
+        self.assertEqual(self.engine.analysis.call_count,2)
+        # The same FEN at full strength is a distinct analysis.
+        full=server.analyze_fen(fen,elo="full")
+        self.assertEqual(full["elo"],"full")
+        self.assertEqual(self.engine.analysis.call_count,3)
+        self.assertEqual(self.engine.configure.call_args_list[-1].args[0],
+                         {"UCI_LimitStrength":False})
+        self.assertIn((fen,1.0,"full"),server.ANALYSIS_CACHE)
+        # Switching back to any older setting must use the matching cache.
+        server.analyze_fen(fen,elo=1400)
+        self.assertEqual(self.engine.analysis.call_count,3)
+
+    def test_rejects_invalid_main_agent_elo(self):
+        for elo in (1319,3191,False,True,1650.5,"1650","unlimited",[],{}):
+            with self.subTest(elo=elo):
+                with self.assertRaises(ValueError):
+                    server.analyze_fen(chess.Board().fen(),elo=elo)
+        self.engine.analysis.assert_not_called()
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
         result=server.analyze_fen(chess.Board().fen(), 1)
@@ -190,8 +220,8 @@ class AdjustableAnalysisTests(unittest.TestCase):
         server.analyze_fen(fen,1)
         server.analyze_fen(fen,0.2)
         self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,0.2),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0),server.ANALYSIS_CACHE)
+        self.assertIn((fen,0.2,1400),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,1400),server.ANALYSIS_CACHE)
 
     def test_rejects_invalid_search_times(self):
         for seconds in (0,0.1,0.7,5,True,"1",float("nan")):
