@@ -17,6 +17,27 @@ const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
 
+// Main-agent strength is a browser preference; the server validates each request.
+const strengthControl=$('strengthElo'),fullStrengthControl=$('fullStrength');
+const savedElo=Number(localStorage.getItem('chessCoachMainElo'));
+strengthControl.value=Number.isInteger(savedElo)&&savedElo>=1320&&savedElo<=3190?savedElo:1400;
+fullStrengthControl.checked=localStorage.getItem('chessCoachMainFull')==='true';
+function selectedStrength(){return fullStrengthControl.checked?'full':Number(strengthControl.value);}
+function refreshStrength(){
+  $('strengthValue').textContent=strengthControl.value;
+  strengthControl.disabled=fullStrengthControl.checked;
+  localStorage.setItem('chessCoachMainElo',strengthControl.value);
+  localStorage.setItem('chessCoachMainFull',String(fullStrengthControl.checked));
+  invalidateCapture();
+  if(currentFen&&!coachHidden&&currentFen.split(' ')[1]===$('myColor').value)
+    void recommend(currentFen);
+}
+strengthControl.addEventListener('input',refreshStrength);
+fullStrengthControl.addEventListener('change',refreshStrength);
+$('strengthValue').textContent=strengthControl.value;
+strengthControl.disabled=fullStrengthControl.checked;
+
+
 async function api(path, payload) {
   const response = await fetch(path, {
     method:'POST',
@@ -176,7 +197,7 @@ async function recommend(fen) {
   const sequence=++requestNumber;
   display('Analyzing…');
   try {
-    const result=await api('/api/analyze',{fen});
+    const result=await api('/api/analyze',{fen,elo:selectedStrength()});
     if (coachHidden || sequence!==requestNumber || currentFen!==fen) return;
     display(result.instruction);
     status('Ready. Watching the board for the next move.');
