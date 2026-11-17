@@ -33,6 +33,8 @@ def board_state(board: chess.Board, human_san=None, engine_san=None) -> dict:
         "status": status,
         "human_san": human_san,
         "engine_san": engine_san,
+        "human_uci": None,
+        "engine_uci": None,
     }
 
 
@@ -40,7 +42,8 @@ def initial_position() -> dict:
     return board_state(chess.Board())
 
 
-def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None) -> dict:
+def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None,
+                       moves=None) -> dict:
     """Play White's legal move, then ask a dedicated strength-limited engine for Black's reply.
 
     The engine is a new process so no strength setting can leak into the main
@@ -55,8 +58,19 @@ def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None
     try:
         board = chess.Board(fen)
         move = chess.Move.from_uci(move_uci)
+        if moves is not None:
+            if not isinstance(moves, list) or len(moves) > 400 or any(
+                not isinstance(item, str) or len(item) not in (4, 5) for item in moves
+            ):
+                raise ValueError("Invalid practice history")
+            replay = chess.Board()
+            for item in moves:
+                replay.push_uci(item)
+            if replay.fen() != board.fen():
+                raise ValueError("Practice history does not match board")
+            board = replay
     except ValueError as exc:
-        raise ValueError("Invalid board or move") from exc
+        raise ValueError(f"Invalid board, move, or practice history: {exc}") from exc
     if not board.is_valid() or board.turn != chess.WHITE or board.is_game_over(claim_draw=True):
         raise ValueError("Expected an unfinished position with White to play")
     if board.fullmove_number > 200:
@@ -66,7 +80,9 @@ def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None
     human_san = board.san(move)
     board.push(move)
     if board.is_game_over(claim_draw=True):
-        return board_state(board, human_san, None)
+        state = board_state(board, human_san, None)
+        state["human_uci"] = move.uci()
+        return state
 
     if not PRACTICE_LOCK.acquire(blocking=False):
         raise RuntimeError("Practice engine busy; retry the move")
@@ -95,6 +111,9 @@ def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None
             raise RuntimeError("Practice engine did not return a legal move")
         engine_san = board.san(result.move)
         board.push(result.move)
-        return board_state(board, human_san, engine_san)
+        state = board_state(board, human_san, engine_san)
+        state["human_uci"] = move.uci()
+        state["engine_uci"] = result.move.uci()
+        return state
     finally:
         PRACTICE_LOCK.release()

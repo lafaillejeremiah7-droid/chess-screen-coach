@@ -1,3 +1,5 @@
+> **v0.6.4 reliability audit:** Training scoring uses unrestricted Stockfish 19 and restores the main agent's 1400-UCI-Elo configuration afterward. Strength-limited recommendations do not attach evaluation scores belonging to a different top principal variation. Sparring accepts verified complete move history so it can detect repetition draws. The main bot's default remains **1400 UCI Elo** and **one second**.
+
 ## Main agent: verify 1400 strength setting
 
 Run `.venv/bin/python scripts/audit_main_1400.py --positions 24 --seconds 1` after installing Stockfish 19. The audit tests the *real main-server analysis route* across 24 legal positions, against a separate 2200-limited Stockfish 19 and unrestricted Stockfish 19, with the same one-second search. It reports move agreement and differences. This measures behavior, **not** an independently verified Elo rating; Stockfish UCI Elo is an engine-calibrated estimate under different match conditions, and cannot be equated with Chess.com or FIDE ratings without an external calibrated opponent pool and sufficient completed games. The CI check publishes a JSON artifact. The test does not modify the default engine strength.
@@ -101,7 +103,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.3**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.6.4**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
