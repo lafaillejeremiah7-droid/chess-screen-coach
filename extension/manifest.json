@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Study Coach — No Screen Share",
-  "version": "0.6.5",
-  "description": "Board-aware local Stockfish analysis with adjustable search time and diagnostics.",
+  "version": "0.6.6",
+  "description": "Practice-only local Stockfish recommendations with live-adjustable Elo and search time.",
   "host_permissions": [
     "http://127.0.0.1/*"
   ],
