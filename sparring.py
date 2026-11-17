@@ -12,7 +12,6 @@ import chess
 import chess.engine
 
 PRACTICE_LOCK = threading.Lock()
-DEFAULT_ELO = 2000
 MIN_ELO = 1320
 MAX_ELO = 3190
 SEARCH_SECONDS = 1.0

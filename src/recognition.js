@@ -12,7 +12,6 @@ export function isBlackCapture(imageData, threshold=14, fraction=0.98){
 
 // The template matcher operates entirely on a Canvas image. It is tuned for the
 // standard green Chess.com board and the user's supplied piece theme.
-export const GLYPHS={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟','.':''};
 export const INITIAL='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 export const PIECES=['.','K','Q','R','B','N','P','k','q','r','b','n','p'];
 const N=48;

@@ -1,6 +1,12 @@
+# Runtime and developer files
+.venv/
+__pycache__/
+*.py[cod]
 node_modules/
 dist/
 public/engine/
-.DS_Store
 .stockfish/
+.DS_Store
 engine_ab_report.json
+main_1400_strength_audit.json
+move_quality_report.json
