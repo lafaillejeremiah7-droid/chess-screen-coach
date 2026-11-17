@@ -46,6 +46,10 @@ test('screenshot resync preserves trusted FEN including en passant and clocks',(
   const observed='rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
   const full=observed+' b KQkq e3 0 1';
   assert.equal(trustedScreenshotFen({observed,priorFen:full,startingFen:INITIAL}),full);
+  const revised=observed+' b - - 5 25';
+  assert.equal(trustedScreenshotFen({
+    observed,priorFen:full,suppliedFen:revised,lastWrittenFen:full,startingFen:INITIAL
+  }),revised);
 });
 
 test('midgame screenshot never silently invents castling or en-passant rights',()=>{
