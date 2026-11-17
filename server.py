@@ -34,7 +34,7 @@ MAX_COACH_ELO = 3190
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[tuple, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
-MAX_BODY = 8192  # Bounded support for 400-move SAN histories and sparring logs.
+MAX_BODY = 8192  # Bounded support for 400-move SAN histories.
 PIECE_NAMES = {
     chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop",
     chess.ROOK: "rook", chess.QUEEN: "queen", chess.KING: "king",
@@ -360,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.local_request_allowed():
             return self.respond_json(403, {"error":"Cross-origin local API request denied"})
         endpoint = urlparse(self.path).path
-        if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate", "/api/sparring/turn"):
+        if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -379,10 +379,6 @@ class Handler(BaseHTTPRequestHandler):
                 from training import evaluate_attempt
                 result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
                                           ENGINE_LOCK, ENGINE, main_elo=MAIN_COACH_ELO)
-            elif endpoint == "/api/sparring/turn":
-                from sparring import play_practice_turn
-                result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"),
-                                            moves=data.get("moves"))
             else:
                 result = analyze_fen(data.get("fen"), data.get("seconds"), data.get("elo"))
             self.respond_json(200, result)
@@ -397,9 +393,6 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         if path == "/api/control":
             return self.respond_json(200, coach_control())
-        if path == "/api/sparring/start":
-            from sparring import initial_position
-            return self.respond_json(200, initial_position())
         if path == "/api/training/positions":
             from training import position_bank
             return self.respond_json(200, {"positions": position_bank()})
@@ -417,7 +410,7 @@ class Handler(BaseHTTPRequestHandler):
             path = "/public/templates/pieces.json"
         # Only serve the specific files needed by the local browser interface.
         permitted = (
-            path in ("/index.html", "/training.html", "/sparring.html", "/src/training.js", "/src/sparring.js", "/src/app.js", "/src/recognition.js", "/src/style.css")
+            path in ("/index.html", "/training.html", "/src/training.js", "/src/app.js", "/src/recognition.js", "/src/style.css")
             or path == "/public/templates/pieces.json"
         )
         if not permitted:
