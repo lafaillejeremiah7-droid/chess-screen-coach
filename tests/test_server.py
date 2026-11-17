@@ -383,3 +383,30 @@ class MainCoachStrengthTests(unittest.TestCase):
             "Threads": 1, "Hash": 16,
             "UCI_LimitStrength": True, "UCI_Elo": 1400
         })
+
+
+class LocalApiBoundaryTests(unittest.TestCase):
+    def test_loopback_api_rejects_untrusted_origins_and_host_headers(self):
+        import urllib.request
+        import urllib.error
+        from http.server import ThreadingHTTPServer
+        http=ThreadingHTTPServer(("127.0.0.1",0),server.Handler)
+        thread=threading.Thread(target=http.serve_forever,daemon=True)
+        thread.start()
+        url=f"http://127.0.0.1:{http.server_port}/api/health"
+        try:
+            with urllib.request.urlopen(url, timeout=3) as response:
+                self.assertEqual(response.status,200)
+            for headers in ({"Origin":"https://untrusted.example"},
+                            {"Host":"untrusted.example"},
+                            {"Origin":"null"}):
+                with self.subTest(headers=headers):
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=3)
+                    self.assertEqual(caught.exception.code,403)
+            extension_origin={"Origin":"chrome-extension://"+"a"*32}
+            with urllib.request.urlopen(urllib.request.Request(url,headers=extension_origin),timeout=3) as response:
+                self.assertEqual(response.status,200)
+        finally:
+            http.shutdown()
+            http.server_close()
