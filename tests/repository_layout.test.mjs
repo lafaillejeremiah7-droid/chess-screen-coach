@@ -7,7 +7,7 @@ const source=path=>readFileSync(new URL(path,root),'utf8');
 const exists=path=>existsSync(new URL(path,root));
 
 test('all local HTML scripts and stylesheets exist',()=>{
-  for(const page of ['index.html','training.html','sparring.html']){
+  for(const page of ['index.html','training.html']){
     const html=source(page);
     const assets=[...html.matchAll(/(?:src|href)="(\/src\/[^"]+)"/g)]
       .map(match=>match[1].slice(1));
@@ -37,7 +37,7 @@ test('Node is used only as a built-in test runner',()=>{
 });
 
 test('core backend, position templates, training and experiment tools are retained',()=>{
-  for(const path of ['server.py','sparring.py','training.py','public/templates/pieces.json',
+  for(const path of ['server.py','training.py','public/templates/pieces.json',
                      'scripts/install_stockfish19.py','scripts/check_stockfish19_ready.py',
                      'scripts/compare_engines.py','scripts/audit_main_1400.py',
                      '.github/workflows/selfplay-million.yml']){
