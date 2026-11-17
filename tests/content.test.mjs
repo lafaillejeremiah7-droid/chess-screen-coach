@@ -76,9 +76,18 @@ function harness(respond,pathname='/play/computer',options=null){
     }}}
   };
   if(options){
+    const storageListeners=[];
     context.chrome.storage={
-      local:{get(_defaults,callback){callback(options);}},
-      onChanged:{addListener(){}}
+      local:{
+        get(_defaults,callback){callback(options);},
+        set(values){
+          Object.assign(options,values);
+          const changes=Object.fromEntries(Object.entries(values).map(([key,value])=>
+            [key,{newValue:value}]));
+          for(const listener of storageListeners)listener(changes,'local');
+        }
+      },
+      onChanged:{addListener(callback){storageListeners.push(callback);}}
     };
   }
   vm.runInNewContext(source,context);
@@ -111,6 +120,26 @@ test('default engine request uses one second',async()=>{
   assert.equal(first.seconds,1);
   assert.equal(first.elo,1650);
 });
+test('changing practice slider recomputes the same position immediately',async()=>{
+  const h=harness(undefined,'/play/computer',{
+    playerSide:'w',thinkSeconds:1,strengthElo:1650,showDetails:false
+  });
+  await h.advance(0);
+  const before=h.requests.filter(x=>x.action==='analyze');
+  assert.equal(before.length,1);
+  assert.equal(before[0].elo,1650);
+  const slider=h.document.getElementById('chess-study-elo-range');
+  assert.ok(slider);
+  slider.value='1900';
+  slider.dispatch('input');
+  slider.dispatch('change');
+  await h.advance(0);
+  const after=h.requests.filter(x=>x.action==='analyze');
+  assert.equal(after.length,2);
+  assert.equal(after.at(-1).elo,1900);
+  assert.equal(h.document.getElementById('chess-study-elo-value').textContent,'1900');
+});
+
 test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
