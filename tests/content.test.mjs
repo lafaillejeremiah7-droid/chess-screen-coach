@@ -10,7 +10,7 @@ const e5='rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR';
 const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 
 function harness(respond,pathname='/play/computer',options=null){
-  let now=0,serial=0,reads=0;
+  let now=0,serial=0,reads=0,storageChanged=null;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
   const requests=[],controlRequests=[];
   const serverState={hidden:false};
@@ -55,12 +55,17 @@ function harness(respond,pathname='/play/computer',options=null){
   if(options){
     context.chrome.storage={
       local:{get(_defaults,callback){callback(options);}},
-      onChanged:{addListener(){}}
+      onChanged:{addListener(listener){storageChanged=listener;}}
     };
   }
   vm.runInNewContext(source,context);
   return {
     state,requests,controlRequests,serverState,document,location,
+    changeSettings(values){
+      if(!storageChanged)throw Error('Storage listener unavailable');
+      const changes=Object.fromEntries(Object.entries(values).map(([key,newValue])=>[key,{newValue}]));
+      storageChanged(changes,'local');
+    },
     get reads(){return reads;},
     get timerCount(){return timers.size;},
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
@@ -87,6 +92,26 @@ test('default engine request uses one second',async()=>{
   const first=h.requests.find(message=>message.action==='analyze');
   assert.equal(first.seconds,1);
 });
+test('main agent adjusts to new UCI Elo immediately on the current board',async()=>{
+  const h=harness(undefined,'/play/computer',{
+    playerSide:'w',thinkSeconds:1,engineElo:1400,showDetails:false,coachHidden:false
+  });
+  await h.advance(0);
+  let analyzed=h.requests.filter(r=>r.action==='analyze');
+  assert.equal(analyzed.length,1);
+  assert.equal(analyzed[0].elo,1400);
+  h.changeSettings({engineElo:1650});
+  await h.advance(0);
+  analyzed=h.requests.filter(r=>r.action==='analyze');
+  assert.equal(analyzed.length,2);
+  assert.equal(analyzed[1].elo,1650);
+  h.changeSettings({engineElo:'full'});
+  await h.advance(0);
+  analyzed=h.requests.filter(r=>r.action==='analyze');
+  assert.equal(analyzed.length,3);
+  assert.equal(analyzed[2].elo,'full');
+});
+
 test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
