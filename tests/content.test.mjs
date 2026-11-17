@@ -216,7 +216,8 @@ test('changed FEN metadata invalidates pending analysis even with identical piec
   h.mutate();await h.advance(180);
   firstDone({ok:true,instruction:'Outdated result'});
   await flush();
-  await h.advance(0);
+  // The dirty-board retry is intentionally debounced by 180 ms.
+  await h.advance(180);
   assert.equal(attempts,2);
   assert.equal(h.requests.filter(r=>r.action==='analyze').at(-1).fen,h.state.fen);
   assert.notEqual(h.text,'Outdated result');
