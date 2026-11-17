@@ -15,12 +15,13 @@
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
-    settings.strengthElo=Number.isInteger(values.strengthElo)&&
-      values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1650;
+    settings.strengthElo=values.strengthElo==="full"?"full":
+      Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?
+        values.strengthElo:1650;
     const slider=document.getElementById("chess-study-elo-range");
-    if(slider)slider.value=String(settings.strengthElo);
+    if(slider)slider.value=String(settings.strengthElo==="full"?3190:settings.strengthElo);
     const value=document.getElementById("chess-study-elo-value");
-    if(value)value.textContent=String(settings.strengthElo);
+    if(value)value.textContent=String(settings.strengthElo==="full"?"Full":settings.strengthElo);
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
@@ -73,11 +74,11 @@
       label.textContent="Strength: ";
       const output=document.createElement("output");
       output.id="chess-study-elo-value";
-      output.textContent=String(settings.strengthElo);
+      output.textContent=String(settings.strengthElo==="full"?"Full":settings.strengthElo);
       const input=document.createElement("input");
       input.id="chess-study-elo-range";
       input.type="range";input.min="1320";input.max="3190";input.step="10";
-      input.value=String(settings.strengthElo);
+      input.value=String(settings.strengthElo==="full"?3190:settings.strengthElo);
       input.setAttribute("aria-label","Approximate Stockfish practice Elo");
       input.addEventListener("input",()=>{output.textContent=input.value;});
       input.addEventListener("change",()=>{
