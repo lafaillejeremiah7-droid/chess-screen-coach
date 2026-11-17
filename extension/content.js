@@ -118,10 +118,10 @@
     observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","data-orientation"]});
   }
 
-  function retry(message){
+  function retry(message, delay=RETRY_MS){
     show(message);
-    retryAt=Date.now()+RETRY_MS;
-    schedule(RETRY_MS);
+    retryAt=Date.now()+delay;
+    schedule(delay);
   }
 
   function request(action,data={}){
@@ -143,9 +143,12 @@
     if(!current(epoch))return false;
     let latest=null;
     try{latest=reader.snapshot(document);}catch{}
+    // Identical pieces can represent different positions: compare full FEN and
+    // move history as well as orientation before displaying an engine response.
     return latest&&latest.board===snapshot.board&&latest.placement===snapshot.placement&&
       latest.bottomColor===snapshot.bottomColor&&latest.playerColor===snapshot.playerColor&&
-      latest.myColor===snapshot.myColor;
+      latest.myColor===snapshot.myColor&&latest.fen===snapshot.fen&&
+      JSON.stringify(latest.moves||[])===JSON.stringify(snapshot.moves||[]);
   }
 
   async function tick(){
@@ -247,7 +250,13 @@
       show("Analyzing…");
       const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
+      if(!answer.ok){
+        const message=answer.error||"Python server unavailable";
+        // A healthy local engine may be occupied for <=2 s by another tab.
+        // Keep the longer backoff for actual connectivity/engine failures.
+        retry(message,/^Engine busy(?:\.|$)/.test(message)?1500:RETRY_MS);
+        return;
+      }
       analysisPending=false;retryAt=0;
       settledText=displayInstruction(answer);show(settledText);
     }finally{

@@ -70,6 +70,8 @@ For installing Stockfish, the engine's executable SHA-256 verification, and manu
 
 - Midgame reconstruction requires a complete move history or valid FEN; board pieces alone do not reveal turn, castling, or en-passant rights.
 - Dashboard image recognition depends on the supported piece theme and board appearance. ChromeOS capture and current Chess.com markup require testing on your actual device.
+- **Midgame screenshot resync:** The dashboard first attempts a legal move transition from the last trusted FEN. If the position cannot be recovered, paste its **exact six-field FEN** before resyncing; an image alone cannot recover castling rights, en-passant state, or accurate move counters. It no longer silently assumes all midgame castling rights are lost.
+- The extension rejects stale suggestions when full FEN metadata or move history changes, checks board viewport overlap, and retries a temporarily busy engine faster than a failed server.
 - A hidden coach can leave the local Python server running; stop that process with `Ctrl+C` to shut it down.
 
 Python API access is restricted to loopback with Host/Origin checks. No screen images are uploaded by the extension or Python server.

@@ -46,7 +46,7 @@ function fakePiece(classes, attrs={}){
 }
 function fakeBoard(width,nodes,extra={}){
   return {
-    getBoundingClientRect(){return {width,height:width};},
+    getBoundingClientRect(){return {width,height:width,...(extra.rect||{})};},
     querySelectorAll(){return nodes;},
     classList:{contains(name){return (extra.classes||[]).includes(name);}},
     getAttribute(name){return extra[name]??null;}
@@ -130,4 +130,15 @@ test('extracts complete SAN history for recovery after several unseen moves',()=
   }));
   const doc={querySelectorAll(selector){return selector==='[data-ply]'?nodes:[];}};
   assert.deepEqual(globalThis.ChessCoachBoard.readMoveHistory(doc),history);
+});
+
+test("does not select a larger board wholly outside the viewport",()=>{
+  const pieces=classesFromFen(initialFen).map(cls=>fakePiece(cls));
+  const offscreen=fakeBoard(800,pieces,{rect:{left:1900,top:0,right:2700,bottom:800}});
+  const playable=fakeBoard(480,pieces,{rect:{left:100,top:100,right:580,bottom:580}});
+  const doc={
+    defaultView:{innerWidth:1280,innerHeight:800},
+    querySelectorAll(){return [offscreen,playable];}
+  };
+  assert.equal(findBoard(doc),playable);
 });

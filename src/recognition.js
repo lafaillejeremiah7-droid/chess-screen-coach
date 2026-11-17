@@ -74,6 +74,21 @@ export function fenToBoard(fen,orientation='white'){
   });
   return orientation==='white'?board:board.reverse().map(row=>row.reverse());
 }
+// A screenshot identifies pieces, not the full chess state. Never fabricate
+// midgame castling, en-passant, turn, or move-clock information.
+export function trustedScreenshotFen({observed,priorFen='',suppliedFen='',lastWrittenFen=null,startingFen}){
+  if(typeof observed!=='string'||!observed)return null;
+  const candidate=typeof suppliedFen==='string'?suppliedFen.trim():'';
+  const fields=candidate.split(/\s+/);
+  // Explicitly entered FEN takes precedence over an older tracked position,
+  // including identical piece layouts with different castling rights.
+  if(candidate&&candidate!==lastWrittenFen&&fields.length===6&&fields[0]===observed)
+    return candidate;
+  if(priorFen&&priorFen.split(' ')[0]===observed)return priorFen;
+  if(observed===INITIAL.split(' ')[0])return startingFen;
+  throw Error('Midgame resync needs an exact full FEN. Piece locations alone cannot establish turn, castling, or en-passant rights. Paste FEN and retry.');
+}
+
 export async function readBoard(source,crop,templates,orientation){
   if(!crop||crop.size<32)throw Error('Drag a square around the entire board first.');
   const scratch=document.createElement('canvas');scratch.width=N;scratch.height=N;

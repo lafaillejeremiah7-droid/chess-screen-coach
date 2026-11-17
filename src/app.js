@@ -1,4 +1,4 @@
-import {INITIAL, boardToFen, loadTemplates, readBoard, isBlackCapture} from './recognition.js';
+import {INITIAL, boardToFen, loadTemplates, readBoard, isBlackCapture, trustedScreenshotFen} from './recognition.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('screen');
@@ -10,12 +10,18 @@ captureProbe.width=captureProbe.height=32;
 const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
+let lastWrittenFen=null; // Distinguish user-pasted FEN from stale auto-populated text.
 let previewTimer=null, captureInterrupted=false,coachHidden=false,wasFloating=false,lastControlAt=0;
 let captureVersion=0;
 function invalidateCapture(){captureVersion++;requestNumber++;}
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
+function saveTrackedFen(fen){
+  currentFen=fen;
+  $('fen').value=fen;
+  lastWrittenFen=fen;
+}
 
 async function api(path, payload) {
   const response = await fetch(path, {
@@ -218,14 +224,36 @@ async function readNow(resync=false) {
       throw Error('Board recognition is uncertain. Select a clearer board or paste a FEN.');
     const observed=placement(result.fen);
     if (resync || !currentFen) {
-      const fen=boardToFen(result.board,orientation,$('turn').value,castlingFor(observed),'-');
-      currentFen=fen;
-      $('fen').value=fen;
+      const entered=$('fen').value.trim();
+      const manualOverride=entered!==lastWrittenFen&&
+        entered.split(/\s+/).length===6&&placement(entered)===observed;
+      let fen=manualOverride?entered:
+        (currentFen&&placement(currentFen)===observed?currentFen:null);
+      // First attempt a legal transition. A manual resync should not discard
+      // real castling, en-passant, turn, or move-clock state when tracking works.
+      if(!fen&&currentFen){
+        try {
+          const tracked=await api('/api/track',{previous:currentFen,placement:observed});
+          if(epoch!==captureVersion||coachHidden)return;
+          fen=tracked.fen;
+        }catch{
+          // More than two missed plies need a trusted full FEN, not guesses.
+        }
+      }
+      if(!fen){
+        fen=trustedScreenshotFen({
+          observed,
+          priorFen:currentFen||'',
+          suppliedFen:$('fen').value,
+          lastWrittenFen,
+          startingFen:boardToFen(result.board,orientation,$('turn').value,castlingFor(observed),'-')
+        });
+      }
+      saveTrackedFen(fen);
     } else if (placement(currentFen)!==observed) {
       const tracked=await api('/api/track',{previous:currentFen,placement:observed});
       if(epoch!==captureVersion||coachHidden)return;
-      currentFen=tracked.fen;
-      $('fen').value=currentFen;
+      saveTrackedFen(tracked.fen);
     } else if (!recovered) return;
 
     if (currentFen.split(' ')[1]!==$('myColor').value) {
