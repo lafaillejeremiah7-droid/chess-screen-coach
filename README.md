@@ -20,6 +20,12 @@ Run `.venv/bin/python scripts/audit_main_1400.py --positions 24 --seconds 1` aft
 
 # Python Chess Screen Coach
 
+**v0.6.5 display:** Move suggestions use a small, muted text line at the top of
+the Chess.com tab. The line inherits the page's font and text color, with no
+background card, border, or shadow. The full move instruction and H shortcut
+remain available. This changes the appearance; the text is still visible to
+anyone viewing or capturing your screen.
+
 **Stockfish 19 upgrade (experimental branch):** [Installation, verification and A/B engine testing](docs/stockfish19.md). The pinned Stockfish 19 binary is installed locally; GitHub updates alone do not install software on your Chromebook. Existing one-second settings stay unchanged.
 
 > **v0.6.1 extension controls.** Press **H** on a Chess.com tab to hide or resume the entire coach. Hiding removes the overlay and stops board monitoring and new engine requests until resumed. The hidden state is saved across tabs and reloads. The move display is smaller. Default analysis time remains **1 second**. The
@@ -78,7 +84,7 @@ fair-play rules; this technical update does not change those rules.
    to `http://127.0.0.1:8765`.
 5. Open Chess.com **Play Bots** at
    `https://www.chess.com/play/computer`. Start a fresh game from its
-   standard initial position. A dark top-of-tab overlay appears automatically
+   standard initial position. A small top-of-tab text line appears automatically
    and shows `Move [piece] from [square] to [square]` on your turn.
 
 You **do not** need to open the old dashboard or click Share Screen.
@@ -107,7 +113,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.4**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.6.5**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
