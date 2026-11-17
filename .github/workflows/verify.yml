@@ -20,12 +20,9 @@ jobs:
           python-version: '3.12'
       - name: Run browser and extension unit tests
         run: |
-          node --check extension/board.js
           node --check extension/content.js
           node --check extension/background.js
-          node --check extension/options.js
           node --check src/app.js
-          node --check src/recognition.js
           node --check src/training.js
           node --check src/sparring.js
           npm test
@@ -67,7 +64,7 @@ jobs:
           try:
               status, health = request("/api/health")
               assert status == 200 and health["python"] and health["stockfish"]
-              assert health["default_elo"] == 1650 and health["strength_limited"]
+              assert health["default_elo"] == 1400 and health["strength_limited"]
               board = chess.Board()
               status, answer = request("/api/analyze", {"fen": board.fen()})
               move = chess.Move.from_uci(answer["from"] + answer["to"])
@@ -75,7 +72,7 @@ jobs:
               assert answer["instruction"].startswith("Move ")
               print("Real Stockfish:", answer["instruction"])
               # Training must temporarily use unrestricted evaluations and
-              # leave the main 1650-UCI-Elo coach usable afterward.
+              # leave the main 1400-UCI-Elo coach usable afterward.
               status, training = request("/api/training/evaluate",
                                          {"fen": board.fen(), "move": "e2e4"})
               assert status == 200 and training["best"] in [

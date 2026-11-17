@@ -6,8 +6,8 @@ import {readFileSync} from 'node:fs';
 const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',import.meta.url),'utf8'));
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
-test('extension is installed on Chess.com but recommendations are practice-only',()=>{
-  assert.equal(manifest.version,'0.6.6');
+test('extension is injected on Chess.com including human-game URLs',()=>{
+  assert.equal(manifest.version,'0.6.4');
   assert.ok(manifest.permissions.includes('storage'));
   assert.equal(manifest.options_page,'options.html');
   assert.ok(manifest.content_scripts[0].matches.includes('https://www.chess.com/*'));
@@ -16,7 +16,7 @@ test('extension is installed on Chess.com but recommendations are practice-only'
   assert.ok(manifest.content_scripts[0].js.includes('board.js'));
 });
 
-test('Stockfish bridge authorizes practice routes and rejects live human games',async()=>{
+test('Stockfish bridge authorizes Chess.com game URLs but no other hosts',async()=>{
   let listener;
   const responses=[];
   const sandbox={
@@ -27,15 +27,13 @@ test('Stockfish bridge authorizes practice routes and rejects live human games',
   vm.runInNewContext(background,sandbox);
   assert.equal(typeof listener,'function');
   for(const url of [
-    'https://www.chess.com/play/computer',
-    'https://www.chess.com/puzzles',
+    'https://www.chess.com/play/online',
+    'https://www.chess.com/game/live/123',
     'https://chess.com/analysis'
   ]){
     assert.equal(listener({action:'health'},{url},value=>responses.push(value)),true);
   }
   for(const url of [
-    'https://www.chess.com/play/online',
-    'https://www.chess.com/game/live/123',
     'https://notchess.com/play/online',
     'http://www.chess.com/play/online',
     'https://chess.com.attacker.example/game'
@@ -50,10 +48,4 @@ test('Stockfish bridge authorizes practice routes and rejects live human games',
 test('engine requests only allow bounded analysis time',()=>{
   const src=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
   assert.match(src,/\[0\.2,0\.5,1,2\]\.includes\(body\.seconds\)/);
-});
-
-test('practice Elo is validated in the local bridge',()=>{
-  assert.match(background,/body\.elo>=1320&&body\.elo<=3190/);
-  assert.match(background,/Number\.isInteger\(body\.elo\)/);
-  assert.match(background,/body\.elo==="full"/);
 });

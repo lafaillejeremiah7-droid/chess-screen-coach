@@ -10,23 +10,14 @@
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
-  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1650,showDetails:false,coachHidden:false};
+  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
-    settings.strengthElo=values.strengthElo==="full"?"full":
-      Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?
-        values.strengthElo:1650;
-    const slider=document.getElementById("chess-study-elo-range");
-    if(slider)slider.value=String(settings.strengthElo==="full"?3190:settings.strengthElo);
-    const value=document.getElementById("chess-study-elo-value");
-    if(value)value.textContent=String(settings.strengthElo==="full"?"Full":settings.strengthElo);
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
-    // Discard results computed under an old strength while a request is pending.
-    generation++;dirty=true;
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
@@ -51,8 +42,7 @@
 
   function eligible(){
     return location.protocol==="https:"&&
-      (location.hostname==="www.chess.com"||location.hostname==="chess.com")&&
-      /^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname);
+      (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
   // Route-independent visibility: supported Chess.com pages use the same coach controls.
   const active=()=>eligible()&&!document.hidden&&!coachHidden;
@@ -64,36 +54,11 @@
     if(!element){
       element=document.createElement("div");
       element.id="chess-study-no-share-overlay";
-      const text=document.createElement("div");
-      text.id="chess-study-no-share-message";
-      text.setAttribute("role","status");
-      text.setAttribute("aria-live","polite");
-      element.appendChild(text);
-      const label=document.createElement("label");
-      label.id="chess-study-elo-control";
-      label.textContent="Strength: ";
-      const output=document.createElement("output");
-      output.id="chess-study-elo-value";
-      output.textContent=String(settings.strengthElo==="full"?"Full":settings.strengthElo);
-      const input=document.createElement("input");
-      input.id="chess-study-elo-range";
-      input.type="range";input.min="1320";input.max="3190";input.step="10";
-      input.value=String(settings.strengthElo==="full"?3190:settings.strengthElo);
-      input.setAttribute("aria-label","Approximate Stockfish practice Elo");
-      input.addEventListener("input",()=>{output.textContent=input.value;});
-      input.addEventListener("change",()=>{
-        const elo=Number(input.value);
-        if(Number.isInteger(elo)&&elo>=1320&&elo<=3190)
-          chrome.storage?.local?.set?.({strengthElo:elo});
-      });
-      label.append(output,input);
-      element.appendChild(label);
+      element.setAttribute("role","status");
+      element.setAttribute("aria-live","polite");
       document.body.appendChild(element);
     }
-    if(message!==lastText){
-      element.querySelector("#chess-study-no-share-message").textContent=message;
-      lastText=message;
-    }
+    if(message!==lastText){element.textContent=message;lastText=message;}
   }
 
   function reset(){
@@ -118,10 +83,10 @@
     observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","data-orientation"]});
   }
 
-  function retry(message, delay=RETRY_MS){
+  function retry(message){
     show(message);
-    retryAt=Date.now()+delay;
-    schedule(delay);
+    retryAt=Date.now()+RETRY_MS;
+    schedule(RETRY_MS);
   }
 
   function request(action,data={}){
@@ -143,12 +108,9 @@
     if(!current(epoch))return false;
     let latest=null;
     try{latest=reader.snapshot(document);}catch{}
-    // Identical pieces can represent different positions: compare full FEN and
-    // move history as well as orientation before displaying an engine response.
     return latest&&latest.board===snapshot.board&&latest.placement===snapshot.placement&&
       latest.bottomColor===snapshot.bottomColor&&latest.playerColor===snapshot.playerColor&&
-      latest.myColor===snapshot.myColor&&latest.fen===snapshot.fen&&
-      JSON.stringify(latest.moves||[])===JSON.stringify(snapshot.moves||[]);
+      latest.myColor===snapshot.myColor;
   }
 
   async function tick(){
@@ -248,15 +210,9 @@
       analysisPending=currentFen.split(" ")[1]===side;
       if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
       show("Analyzing…");
-      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.strengthElo});
+      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(!answer.ok){
-        const message=answer.error||"Python server unavailable";
-        // A healthy local engine may be occupied for <=2 s by another tab.
-        // Keep the longer backoff for actual connectivity/engine failures.
-        retry(message,/^Engine busy(?:\.|$)/.test(message)?1500:RETRY_MS);
-        return;
-      }
+      if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
       analysisPending=false;retryAt=0;
       settledText=displayInstruction(answer);show(settledText);
     }finally{

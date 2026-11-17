@@ -17,20 +17,3 @@
   letter-spacing:normal !important;
   pointer-events:none !important;
 }
-#chess-study-elo-control {
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  gap:6px !important;
-  margin-top:5px !important;
-  font:500 11px/1.2 system-ui,sans-serif !important;
-  pointer-events:auto !important;
-}
-#chess-study-elo-range {
-  width:140px !important;
-  max-width:28vw !important;
-  accent-color:#9cc8ed !important;
-  pointer-events:auto !important;
-  cursor:pointer !important;
-}
-#chess-study-elo-value { min-width:32px !important; font-variant-numeric:tabular-nums !important; }

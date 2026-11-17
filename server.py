@@ -26,13 +26,11 @@ CONTROL_LOCK = threading.Lock()
 COACH_HIDDEN = False
 ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
-# Default strength for local analysis; practice clients may override per request.
+# Permanent default for move recommendations from the extension/dashboard.
 # UCI_Elo is approximate and not equivalent to any online rating.
-MAIN_COACH_ELO = 1650
-MIN_COACH_ELO = 1320
-MAX_COACH_ELO = 3190
+MAIN_COACH_ELO = 1400
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
-ANALYSIS_CACHE: OrderedDict[tuple, dict] = OrderedDict()
+ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
 MAX_BODY = 8192  # Bounded support for 400-move SAN histories and sparring logs.
 PIECE_NAMES = {
@@ -98,7 +96,7 @@ def describe_move(board: chess.Board, move: chess.Move) -> str:
     if capture:
         captured_name = PIECE_NAMES[captured.piece_type] if captured else "pawn"
         return f"Captures a {captured_name}."
-    return "Stockfish's choice at the current search budget."
+    return "Stockfish's strength-limited choice at the current search budget."
 
 
 def search_seconds(value: float | None) -> float:
@@ -109,19 +107,8 @@ def search_seconds(value: float | None) -> float:
     return float(value)
 
 
-def search_elo(value: int | str | None) -> int | str:
-    """Validate optional strength of practice/analysis move recommendations."""
-    if value is None:
-        return MAIN_COACH_ELO
-    if value == "full":
-        return "full"
-    if type(value) is not int or not MIN_COACH_ELO <= value <= MAX_COACH_ELO:
-        raise ValueError(f"Practice Elo must be an integer from {MIN_COACH_ELO} to {MAX_COACH_ELO}, or full strength.")
-    return value
-
-
 def configure_main_engine(engine) -> None:
-    """Give the main recommendation bot an initial ~1650 UCI-Elo target.
+    """Give the *main* recommendation bot a permanent ~1400 UCI-Elo target.
 
     Stockfish chooses the weakened move in its final UCI bestmove. Reading
     only the top analysis PV bypasses the limit.
@@ -180,13 +167,12 @@ def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
     return result
 
 
-def analyze_fen(fen: str, seconds: float | None = None, elo: int | str | None = None) -> dict:
+def analyze_fen(fen: str, seconds: float | None = None) -> dict:
     # H suspends analysis even when an earlier answer is already cached.
     with CONTROL_LOCK:
         if COACH_HIDDEN:
             raise RuntimeError("Chess coach hidden; analysis paused")
     seconds = search_seconds(seconds)
-    elo = search_elo(elo)
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
     try:
@@ -203,16 +189,10 @@ def analyze_fen(fen: str, seconds: float | None = None, elo: int | str | None = 
     if not ENGINE_LOCK.acquire(blocking=False):
         raise RuntimeError("Engine busy. Keep one coach tab open and try again.")
     try:
-        key = (board.fen(), seconds, elo)
+        key = (board.fen(), seconds)
         if key in ANALYSIS_CACHE:
             ANALYSIS_CACHE.move_to_end(key)
             return dict(ANALYSIS_CACHE[key])
-        # Configure strength under the same lock as analysis, so concurrent
-        # requests cannot mix strengths or leak settings between positions.
-        if elo == "full":
-            ENGINE.configure({"UCI_LimitStrength": False})
-        else:
-            ENGINE.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
         info = engine_info(board, seconds)
         # Use the actual UCI bestmove selected under UCI_LimitStrength,
         # never the full-strength top principal variation.
@@ -231,7 +211,6 @@ def analyze_fen(fen: str, seconds: float | None = None, elo: int | str | None = 
             "to": chess.square_name(move.to_square),
             "fen": board.fen(),
             "seconds": seconds,
-            "elo": elo,
             "reason": describe_move(board, move),
             "depth": info.get("depth") if isinstance(info.get("depth"), int) else None,
             "nodes": info.get("nodes") if isinstance(info.get("nodes"), int) else None,
@@ -384,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"),
                                             moves=data.get("moves"))
             else:
-                result = analyze_fen(data.get("fen"), data.get("seconds"), data.get("elo"))
+                result = analyze_fen(data.get("fen"), data.get("seconds"))
             self.respond_json(200, result)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.respond_json(400, {"error": str(exc)})

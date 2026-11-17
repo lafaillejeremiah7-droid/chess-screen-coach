@@ -110,7 +110,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn((initial_fen, 1.0, 1650), server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 1.0), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.analysis.call_count, 3)
 
     def test_main_coach_recommends_weaker_selected_move_not_top_pv(self):
@@ -172,7 +172,7 @@ class AdjustableAnalysisTests(unittest.TestCase):
         answer = server.analyze_fen(fen)
         self.assertEqual(answer["seconds"], 1.0)
         self.assertEqual(self.engine.analysis.call_args.args[1].time, 1.0)
-        self.assertIn((fen, 1.0, 1650), server.ANALYSIS_CACHE)
+        self.assertIn((fen, 1.0), server.ANALYSIS_CACHE)
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
         result=server.analyze_fen(chess.Board().fen(), 1)
@@ -190,42 +190,8 @@ class AdjustableAnalysisTests(unittest.TestCase):
         server.analyze_fen(fen,1)
         server.analyze_fen(fen,0.2)
         self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,0.2,1650),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0,1650),server.ANALYSIS_CACHE)
-
-    def test_adjustable_strength_changes_engine_and_cache_in_place(self):
-        fen=chess.Board().fen()
-        low=server.analyze_fen(fen,1,1400)
-        high=server.analyze_fen(fen,1,1650)
-        reused=server.analyze_fen(fen,1,1650)
-        self.assertEqual(low["elo"],1400)
-        self.assertEqual(high["elo"],1650)
-        self.assertEqual(reused,high)
-        self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,1.0,1400),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0,1650),server.ANALYSIS_CACHE)
-        self.assertEqual(self.engine.configure.call_args.args[0],
-                         {"UCI_LimitStrength":True,"UCI_Elo":1650})
-
-    def test_full_strength_disables_uci_limit_and_separates_cache(self):
-        fen=chess.Board().fen()
-        limited=server.analyze_fen(fen,1,1650)
-        full=server.analyze_fen(fen,1,"full")
-        self.assertEqual(limited["elo"],1650)
-        self.assertEqual(full["elo"],"full")
-        self.assertEqual(self.engine.configure.call_args.args[0],{"UCI_LimitStrength":False})
-        self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,1.0,1650),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0,"full"),server.ANALYSIS_CACHE)
-        server.analyze_fen(fen,1,"full")
-        self.assertEqual(self.engine.analysis.call_count,2)
-
-    def test_rejects_invalid_strengths(self):
-        for elo in (1320.5,0,1000,5000,"1650",True,float("nan")):
-            with self.subTest(elo=elo):
-                with self.assertRaises(ValueError):
-                    server.analyze_fen(chess.Board().fen(),1,elo)
-        self.engine.analysis.assert_not_called()
+        self.assertIn((fen,0.2),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0),server.ANALYSIS_CACHE)
 
     def test_rejects_invalid_search_times(self):
         for seconds in (0,0.1,0.7,5,True,"1",float("nan")):
@@ -341,20 +307,6 @@ class SparringTests(unittest.TestCase):
         self.assertTrue(state["fen"].startswith(chess.STARTING_BOARD_FEN))
         self.assertFalse(state["finished"])
 
-    def test_offline_1650_preset_configures_only_separate_sparring_engine(self):
-        from sparring import play_practice_turn
-        fake = Mock()
-        fake.id = {"name": "Stockfish 19"}
-        fake.play.return_value = chess.engine.PlayResult(chess.Move.from_uci("e7e5"), None)
-        state = play_practice_turn(chess.Board().fen(), "e2e4", 1650,
-                                   engine_path="/path/to/stockfish",
-                                   engine_factory=lambda _: fake)
-        fake.configure.assert_called_once_with({
-            "Threads": 1, "Hash": 16, "UCI_LimitStrength": True, "UCI_Elo": 1650
-        })
-        self.assertEqual(state["engine_uci"], "e7e5")
-        self.assertEqual(server.MAIN_COACH_ELO, 1650)
-
     def test_2000_elo_configured_on_separate_engine(self):
         from sparring import play_practice_turn
         fake=Mock()
@@ -423,13 +375,13 @@ class SparringTests(unittest.TestCase):
 
 
 class MainCoachStrengthTests(unittest.TestCase):
-    def test_main_engine_strength_default_is_1650(self):
-        self.assertEqual(server.MAIN_COACH_ELO, 1650)
+    def test_main_engine_strength_default_is_permanent_1400(self):
+        self.assertEqual(server.MAIN_COACH_ELO, 1400)
         fake=Mock()
         server.configure_main_engine(fake)
         fake.configure.assert_called_once_with({
             "Threads": 1, "Hash": 16,
-            "UCI_LimitStrength": True, "UCI_Elo": 1650
+            "UCI_LimitStrength": True, "UCI_Elo": 1400
         })
 
 

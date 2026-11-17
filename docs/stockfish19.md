@@ -1,31 +1,61 @@
-# Stockfish 19: installation and optional testing
+# Stockfish 19 upgrade and controlled experiments
 
-The main bot uses the official **Stockfish 19** binary installed locally under `.stockfish/bin/stockfish`. A system `apt install stockfish` does not guarantee the correct version.
+The current official stable release is **Stockfish 19** (GitHub tag `sf_19`, September 5, 2026). The repository originally used whichever Stockfish version `apt install stockfish` provided, which does **not** guarantee version 19.
 
-## Install and verify
+## Install on your Chromebook (Linux terminal)
 
-From the updated repository root, with a Python environment created and dependencies installed:
+From the **updated** `chess-screen-coach` checkout:
+
+```bash
+python3 scripts/install_stockfish19.py
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python server.py
+```
+
+If the repository has not yet been cloned:
+
+```bash
+git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git
+cd chess-screen-coach
+```
+
+If you are testing the feature branch, switch to `feature/stockfish19-baseline-ab` first. Run `git fetch origin` before switching to it.
+
+The installer selects the correct official Linux universal release for x86_64, aarch64 or riscv64, verifies the published SHA-256 digest, and checks the executable's UCI version **before** replacing an existing binary. It installs to `.stockfish/bin/stockfish`, which the Python server prefers over an older system package. `STOCKFISH_PATH` continues to override the path explicitly. The existing one-second default, thread limit and RAM-conscious 16 MiB hash remain unchanged.
+
+Verify **real installation and 1-second move calculation** on the Chromebook (from the repository folder after installing Python dependencies):
 
 ```bash
 .venv/bin/python scripts/check_stockfish19_ready.py --install
 ```
 
-The installer selects a supported Linux release, validates its pinned SHA-256 checksum, checks the engine's UCI identity, and installs it without committing binaries. The readiness script verifies a legal one-second move. `STOCKFISH_PATH` can specify an existing Stockfish 19 executable.
+The command installs or repairs the official checksum-verified release, confirms the running UCI engine reports Stockfish 19, configures one thread and a 16 MiB hash, runs a timed 1-second starting-position search, and prints a JSON result with `"ready": true` and a legal `"bestmove"` on success. It does not install or verify the Chrome extension. If your existing server is running, stop and restart it to pick up the newly installed engine. Server health: `http://127.0.0.1:8765/api/health` should include `"stockfish19": true`.
 
-Restart `server.py` after changing the executable. The health endpoint `http://127.0.0.1:8765/api/health` exposes `stockfish19`, `default_elo`, and `default_seconds`.
-
-The **main coach** uses an approximate 1400 UCI Elo setting; the separate sparring game offers independently selected strength levels. Neither setting is an independently certified rating.
-
-## Optional controlled engine A/B tests
-
-Use this only if you have two distinct UCI engine executables and want to compare them:
+Verify with:
 
 ```bash
-.venv/bin/python scripts/compare_engines.py --baseline .stockfish/bin/stockfish --candidate /path/to/candidate --games 20 --seconds 1 --output engine_ab_report.json
+printf 'uci\nquit\n' | .stockfish/bin/stockfish | grep '^id name '
+curl -s http://127.0.0.1:8765/api/health
 ```
 
-The script swaps colors across paired openings, reports incomplete games separately, and produces a JSON summary. Small samples cannot support Elo or superiority claims. The engine version and hardware/time controls must be stated with any comparison.
+The release is about 80 MB compressed. GitHub Actions does not install software on your Chromebook; you must run the installer there. Do not commit the binaries to Git.
 
-Official Stockfish 19 release: https://github.com/official-stockfish/Stockfish/releases/tag/sf_19
+## Actual engine experiment: paired A/B tests
 
-Stockfish is distributed under GPL-3.0. Redistributing modified engines requires compliance with its licensing terms.
+The *baseline* is the pinned Stockfish 19 binary. A different executable is the *candidate* (a later patched and compiled search-engine build). Do not label a change stronger until it passes match testing.
+
+```bash
+.venv/bin/python scripts/compare_engines.py \
+  --baseline .stockfish/bin/stockfish \
+  --candidate /path/to/compiled-candidate-stockfish \
+  --games 20 --seconds 1 --output engine_ab_report.json
+```
+
+The script plays each opening twice with colors swapped, uses one thread and 16 MiB hash for each engine, gives each move the same thinking time, tracks incomplete games separately, and produces a JSON report. This is **not** a million-game run, nor evidence of an Elo gain by itself. Small differences need a much larger statistically sound test, preferably official Fishtest-style SPRT.
+
+Next research candidate: a narrowly scoped **threat-sensitive late-move reduction** modification to Stockfish's C++ search. It must be compared against the unmodified engine at the same time limit and hardware. The baseline build is *not* modified in this change.
+
+Stockfish license: GPL-3.0. If distributing a modified executable, comply with its source and license obligations.
+
+Official release: https://github.com/official-stockfish/Stockfish/releases/tag/sf_19
