@@ -14,7 +14,7 @@ The installer selects a supported Linux release, validates its pinned SHA-256 ch
 
 Restart `server.py` after changing the executable. The health endpoint `http://127.0.0.1:8765/api/health` exposes `stockfish19`, `default_elo`, and `default_seconds`.
 
-The **main coach** uses an approximate 1400 UCI Elo setting; the separate sparring game offers independently selected strength levels. Neither setting is an independently certified rating.
+The **main coach** defaults to approximately 1650 UCI Elo, with adjustable practice strength and an unrestricted-strength option. UCI Elo settings are not independently certified human or online chess ratings.
 
 ## Optional controlled engine A/B tests
 
