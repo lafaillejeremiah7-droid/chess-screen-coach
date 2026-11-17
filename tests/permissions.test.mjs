@@ -7,7 +7,7 @@ const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',impo
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
 test('extension is injected on Chess.com including human-game URLs',()=>{
-  assert.equal(manifest.version,'0.6.5');
+  assert.equal(manifest.version,'0.6.6');
   assert.ok(manifest.permissions.includes('storage'));
   assert.equal(manifest.options_page,'options.html');
   assert.ok(manifest.content_scripts[0].matches.includes('https://www.chess.com/*'));
@@ -48,4 +48,6 @@ test('Stockfish bridge authorizes Chess.com game URLs but no other hosts',async(
 test('engine requests only allow bounded analysis time',()=>{
   const src=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
   assert.match(src,/\[0\.2,0\.5,1,2\]\.includes\(body\.seconds\)/);
+  assert.match(src,/Number\.isInteger\(body\.elo\)/);
+  assert.match(src,/body\.elo==="full"/);
 });
