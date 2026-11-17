@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   let body;
   if(action==="track") body={previous:message.previous,placement:message.placement};
   else if(action==="recover") body={moves:message.moves,placement:message.placement};
-  else if(action==="analyze") body={fen:message.fen,seconds:message.seconds};
+  else if(action==="analyze") body={fen:message.fen,seconds:message.seconds,elo:message.elo};
   else if(action==="control" && typeof message.hidden==="boolean")body={hidden:message.hidden};
   const valid=action==="health"||action==="control"||
     (action==="track"?typeof body.previous==="string"&&body.previous.length<=120&&
@@ -26,7 +26,9 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
        body.moves.every(x=>typeof x==="string"&&x.length<=14)&&
        typeof body.placement==="string"&&body.placement.length<=90:
      typeof body.fen==="string"&&body.fen.length<=120&&
-       (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds)));
+       (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds))&&
+       (body.elo===undefined||body.elo==="full"||
+          (Number.isInteger(body.elo)&&body.elo>=1320&&body.elo<=3190)));
   if(!valid){sendResponse({ok:false,error:"Invalid chess position"});return false;}
   (async()=>{
     const controller=new AbortController();
