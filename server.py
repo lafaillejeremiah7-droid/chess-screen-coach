@@ -26,13 +26,13 @@ CONTROL_LOCK = threading.Lock()
 COACH_HIDDEN = False
 ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
-# Permanent default for move recommendations from the extension/dashboard.
+# Default strength for local analysis; practice clients may override per request.
 # UCI_Elo is approximate and not equivalent to any online rating.
-MAIN_COACH_ELO = 1400
+MAIN_COACH_ELO = 1650
 MIN_COACH_ELO = 1320
 MAX_COACH_ELO = 3190
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
-ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
+ANALYSIS_CACHE: OrderedDict[tuple, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
 MAX_BODY = 8192  # Bounded support for 400-move SAN histories and sparring logs.
 PIECE_NAMES = {
@@ -119,7 +119,7 @@ def search_elo(value: int | None) -> int:
 
 
 def configure_main_engine(engine) -> None:
-    """Give the *main* recommendation bot a permanent ~1400 UCI-Elo target.
+    """Give the main recommendation bot an initial ~1650 UCI-Elo target.
 
     Stockfish chooses the weakened move in its final UCI bestmove. Reading
     only the top analysis PV bypasses the limit.
