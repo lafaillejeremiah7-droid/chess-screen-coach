@@ -207,6 +207,19 @@ class AdjustableAnalysisTests(unittest.TestCase):
         self.assertEqual(self.engine.configure.call_args.args[0],
                          {"UCI_LimitStrength":True,"UCI_Elo":1650})
 
+    def test_full_strength_disables_uci_limit_and_separates_cache(self):
+        fen=chess.Board().fen()
+        limited=server.analyze_fen(fen,1,1650)
+        full=server.analyze_fen(fen,1,"full")
+        self.assertEqual(limited["elo"],1650)
+        self.assertEqual(full["elo"],"full")
+        self.assertEqual(self.engine.configure.call_args.args[0],{"UCI_LimitStrength":False})
+        self.assertEqual(self.engine.analysis.call_count,2)
+        self.assertIn((fen,1.0,1650),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,"full"),server.ANALYSIS_CACHE)
+        server.analyze_fen(fen,1,"full")
+        self.assertEqual(self.engine.analysis.call_count,2)
+
     def test_rejects_invalid_strengths(self):
         for elo in (1320.5,0,1000,5000,"1650",True,float("nan")):
             with self.subTest(elo=elo):

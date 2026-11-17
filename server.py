@@ -98,7 +98,7 @@ def describe_move(board: chess.Board, move: chess.Move) -> str:
     if capture:
         captured_name = PIECE_NAMES[captured.piece_type] if captured else "pawn"
         return f"Captures a {captured_name}."
-    return "Stockfish's strength-limited choice at the current search budget."
+    return "Stockfish's choice at the current search budget."
 
 
 def search_seconds(value: float | None) -> float:
@@ -109,12 +109,14 @@ def search_seconds(value: float | None) -> float:
     return float(value)
 
 
-def search_elo(value: int | None) -> int:
+def search_elo(value: int | str | None) -> int | str:
     """Validate optional strength of practice/analysis move recommendations."""
     if value is None:
         return MAIN_COACH_ELO
+    if value == "full":
+        return "full"
     if type(value) is not int or not MIN_COACH_ELO <= value <= MAX_COACH_ELO:
-        raise ValueError(f"Practice Elo must be an integer from {MIN_COACH_ELO} to {MAX_COACH_ELO}")
+        raise ValueError(f"Practice Elo must be an integer from {MIN_COACH_ELO} to {MAX_COACH_ELO}, or full strength.")
     return value
 
 
@@ -178,7 +180,7 @@ def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
     return result
 
 
-def analyze_fen(fen: str, seconds: float | None = None, elo: int | None = None) -> dict:
+def analyze_fen(fen: str, seconds: float | None = None, elo: int | str | None = None) -> dict:
     # H suspends analysis even when an earlier answer is already cached.
     with CONTROL_LOCK:
         if COACH_HIDDEN:
@@ -207,7 +209,10 @@ def analyze_fen(fen: str, seconds: float | None = None, elo: int | None = None) 
             return dict(ANALYSIS_CACHE[key])
         # Configure strength under the same lock as analysis, so concurrent
         # requests cannot mix strengths or leak settings between positions.
-        ENGINE.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
+        if elo == "full":
+            ENGINE.configure({"UCI_LimitStrength": False})
+        else:
+            ENGINE.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
         info = engine_info(board, seconds)
         # Use the actual UCI bestmove selected under UCI_LimitStrength,
         # never the full-strength top principal variation.

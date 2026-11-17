@@ -55,4 +55,5 @@ test('engine requests only allow bounded analysis time',()=>{
 test('practice Elo is validated in the local bridge',()=>{
   assert.match(background,/body\.elo>=1320&&body\.elo<=3190/);
   assert.match(background,/Number\.isInteger\(body\.elo\)/);
+  assert.match(background,/body\.elo==="full"/);
 });
