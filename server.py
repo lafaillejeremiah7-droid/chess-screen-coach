@@ -26,11 +26,13 @@ CONTROL_LOCK = threading.Lock()
 COACH_HIDDEN = False
 ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
-# Permanent default for move recommendations from the extension/dashboard.
+# Default strength for local analysis; practice clients may override per request.
 # UCI_Elo is approximate and not equivalent to any online rating.
-MAIN_COACH_ELO = 1400
+MAIN_COACH_ELO = 1650
+MIN_COACH_ELO = 1320
+MAX_COACH_ELO = 3190
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
-ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
+ANALYSIS_CACHE: OrderedDict[tuple, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
 MAX_BODY = 8192  # Bounded support for 400-move SAN histories and sparring logs.
 PIECE_NAMES = {
@@ -107,8 +109,17 @@ def search_seconds(value: float | None) -> float:
     return float(value)
 
 
+def search_elo(value: int | None) -> int:
+    """Validate optional strength of practice/analysis move recommendations."""
+    if value is None:
+        return MAIN_COACH_ELO
+    if type(value) is not int or not MIN_COACH_ELO <= value <= MAX_COACH_ELO:
+        raise ValueError(f"Practice Elo must be an integer from {MIN_COACH_ELO} to {MAX_COACH_ELO}")
+    return value
+
+
 def configure_main_engine(engine) -> None:
-    """Give the *main* recommendation bot a permanent ~1400 UCI-Elo target.
+    """Give the main recommendation bot an initial ~1650 UCI-Elo target.
 
     Stockfish chooses the weakened move in its final UCI bestmove. Reading
     only the top analysis PV bypasses the limit.
@@ -167,12 +178,13 @@ def engine_info(board: chess.Board, seconds: float, root_moves=None) -> dict:
     return result
 
 
-def analyze_fen(fen: str, seconds: float | None = None) -> dict:
+def analyze_fen(fen: str, seconds: float | None = None, elo: int | None = None) -> dict:
     # H suspends analysis even when an earlier answer is already cached.
     with CONTROL_LOCK:
         if COACH_HIDDEN:
             raise RuntimeError("Chess coach hidden; analysis paused")
     seconds = search_seconds(seconds)
+    elo = search_elo(elo)
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
     try:
@@ -189,10 +201,13 @@ def analyze_fen(fen: str, seconds: float | None = None) -> dict:
     if not ENGINE_LOCK.acquire(blocking=False):
         raise RuntimeError("Engine busy. Keep one coach tab open and try again.")
     try:
-        key = (board.fen(), seconds)
+        key = (board.fen(), seconds, elo)
         if key in ANALYSIS_CACHE:
             ANALYSIS_CACHE.move_to_end(key)
             return dict(ANALYSIS_CACHE[key])
+        # Configure strength under the same lock as analysis, so concurrent
+        # requests cannot mix strengths or leak settings between positions.
+        ENGINE.configure({"UCI_LimitStrength": True, "UCI_Elo": elo})
         info = engine_info(board, seconds)
         # Use the actual UCI bestmove selected under UCI_LimitStrength,
         # never the full-strength top principal variation.
@@ -211,6 +226,7 @@ def analyze_fen(fen: str, seconds: float | None = None) -> dict:
             "to": chess.square_name(move.to_square),
             "fen": board.fen(),
             "seconds": seconds,
+            "elo": elo,
             "reason": describe_move(board, move),
             "depth": info.get("depth") if isinstance(info.get("depth"), int) else None,
             "nodes": info.get("nodes") if isinstance(info.get("nodes"), int) else None,
@@ -363,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"),
                                             moves=data.get("moves"))
             else:
-                result = analyze_fen(data.get("fen"), data.get("seconds"))
+                result = analyze_fen(data.get("fen"), data.get("seconds"), data.get("elo"))
             self.respond_json(200, result)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.respond_json(400, {"error": str(exc)})

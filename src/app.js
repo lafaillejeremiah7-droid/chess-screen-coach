@@ -176,7 +176,7 @@ async function recommend(fen) {
   const sequence=++requestNumber;
   display('Analyzing…');
   try {
-    const result=await api('/api/analyze',{fen});
+    const result=await api('/api/analyze',{fen,elo:Number($('strengthElo').value)});
     if (coachHidden || sequence!==requestNumber || currentFen!==fen) return;
     display(result.instruction);
     status('Ready. Watching the board for the next move.');
@@ -246,6 +246,13 @@ async function readNow(resync=false) {
   }
 }
 
+$('strengthElo').addEventListener('input',()=>{
+  $('strengthValue').textContent=$('strengthElo').value;
+});
+$('strengthElo').addEventListener('change',()=>{
+  if(currentFen && currentFen.split(' ')[1]===$('myColor').value && !coachHidden)
+    void recommend(currentFen);
+});
 $('resync').onclick=()=>readNow(true);
 $('orientation').onchange=()=>{
   invalidateCapture();currentFen=null;

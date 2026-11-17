@@ -5,11 +5,11 @@ The Chrome extension, web dashboard, training page, and sparring page share one 
 
 ## Current capabilities
 
-- **Chrome extension (`extension/`):** Reads compatible Chess.com chessboards from page elements, verifies move tracking, and displays a move. It can reconstruct a midgame position only if a matching full FEN or complete legal move history is available. Supports H to hide/show and pause analysis.
-- **Main coach (`server.py`):** Stockfish 19 with `UCI_LimitStrength=true` and approximate `UCI_Elo=1400` by default; one thread, 16 MiB hash, and **one-second searches** by default. The extension can select 0.2, 0.5, 1, or 2 seconds, with previously saved choices preserved.
+- **Chrome extension (`extension/`):** Reads compatible Chess.com **analysis, puzzles, and computer-opponent** boards from page elements, verifies move tracking, and displays a move. No recommendations on human-game routes. It can reconstruct a midgame position only if a matching full FEN or complete legal move history is available. Supports H to hide/show and pause analysis.
+- **Main coach (`server.py`):** Stockfish 19 with `UCI_LimitStrength=true`, approximate `UCI_Elo=1650` by default, and an adjustable **1320–3190 practice strength** slider on the overlay and dashboard. New settings apply to the next analysis without restarting the engine. One thread, 16 MiB hash, and one-second searches by default (also 0.2, 0.5, or 2 seconds).
 - **Web dashboard (`http://127.0.0.1:8765/`):** Optional screen sharing or image upload for board recognition, manual FEN analysis, and a small movable Document Picture-in-Picture display. Screen frames stay in the browser; only FEN and other chess data are sent to the local server.
-- **Training (`/training.html`):** Up to 100 timed positions in a session, unrestricted engine scoring, and locally saved weakness/review progress. The main coach's 1400 setting is restored after training evaluations.
-- **Sparring (`/sparring.html`):** Play White against a separate Stockfish 19 process as Black. Select an approximate 1400–3000 UCI Elo, including **1650 (+250 relative to the main coach’s 1400 target)**; the standalone opponent initially selects **2000**, independently of the main coach. This preset changes only offline sparring, not the Chrome extension or main move-recommendation service.
+- **Training (`/training.html`):** Up to 100 timed positions in a session, unrestricted engine scoring, and locally saved weakness/review progress. The main coach's default 1650 setting is restored after training evaluations.
+- **Sparring (`/sparring.html`):** Play White against a separate Stockfish 19 process as Black. Select an approximate 1400–3000 UCI Elo, including **1650**; the standalone opponent initially selects **2000**, independently of the main coach. Sparring uses its own engine and does not affect the suggestion agent.
 
 The numerical UCI Elo setting is **not** an official FIDE, CCRL, or Chess.com rating. Engine recommendations in live games against human opponents can violate platform fair-play rules.
 
@@ -34,8 +34,8 @@ If you already have the repository, **skip the clone step** and use the update i
 
 1. Open `chrome://extensions` in Chrome and enable **Developer mode**.
 2. Choose **Load unpacked** and select this repository's `extension` directory.
-3. Open a compatible Chess.com practice or analysis board; the move overlay appears when the board is recognized and your side is to move.
-4. Press **H** on that tab to hide and pause the coach; press **H** again to resume. The shortcut does not shut down the Python server, and it is ignored while typing.
+3. Open Chess.com analysis, puzzles, or a computer-opponent game; the move overlay appears when the board is recognized and your side is to move.
+4. Move the **Strength** slider in the overlay to adjust practice Elo at any time. Press **H** on that tab to hide and pause the coach; press **H** again to resume. The shortcut does not shut down the Python server, and it is ignored while typing.
 
 Use **Extension options** to choose White/Black explicitly when automatic orientation inference is incorrect. The extension reads Chess.com board markup, not arbitrary applications, and cannot repair blacked-out browser rendering or unsupported canvas-only boards.
 
@@ -50,7 +50,7 @@ git pull --ff-only
 .venv/bin/python server.py
 ```
 
-Reload the unpacked extension in `chrome://extensions`; the manifest version should read **0.6.5**. If the extension is loaded from a *separate extracted ZIP directory*, update that directory too: pulling the Linux checkout does not update a distinct Chrome extension folder.
+Reload the unpacked extension in `chrome://extensions`; the manifest version should read **0.6.6**. If the extension is loaded from a *separate extracted ZIP directory*, update that directory too: pulling the Linux checkout does not update a distinct Chrome extension folder.
 
 ## Tests and verification
 
@@ -62,7 +62,7 @@ npm test
 
 `npm test` needs Node.js 22 or newer but **does not require `npm install`**. JavaScript tests use Node's built-in test runner; the obsolete browser Stockfish worker, Vite build, and old npm runtime dependencies have been removed.
 
-The 24-position audit checks whether the 1400-limited bot chooses different moves from stronger engine configurations. **It does not establish an official playing Elo.** GitHub Actions also runs Python/API/extension tests and a real Stockfish 19 integration check.
+The legacy 24-position audit tests the specific 1400 Elo configuration (the new default suggestion strength is 1650) against stronger engine configurations. **It does not establish an official playing Elo.** GitHub Actions also runs Python/API/extension tests and a real Stockfish 19 integration check.
 
 For installing Stockfish, the engine's executable SHA-256 verification, and manual A/B tests, see [Stockfish 19 notes](docs/stockfish19.md). The separate million-game self-play experiment remains on its own branch and is not part of the main coach.
 

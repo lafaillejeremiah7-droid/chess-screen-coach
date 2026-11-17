@@ -18,8 +18,31 @@ function harness(respond,pathname='/play/computer',options=null){
   const document={
     hidden:false,
     body:{appendChild(element){elements.set(element.id,element);}},
-    getElementById(id){return elements.get(id);},
-    createElement(){return {setAttribute(){},remove(){elements.delete(this.id);}};},
+    getElementById(id){return elements.get(id)||elements.get('chess-study-no-share-overlay')?.querySelector('#'+id);},
+    createElement(){
+      return {
+        _text:'',children:[],listeners:new Map(),
+        set textContent(value){this._text=String(value);this.children=[];},
+        get textContent(){return this._text+this.children.map(x=>x.textContent).join('');},
+        setAttribute(){},
+        appendChild(child){this.children.push(child);},
+        append(...children){for(const child of children)this.appendChild(child);},
+        querySelector(selector){
+          if(selector[0]!=='#')return null;
+          const id=selector.slice(1);
+          const queue=[...this.children];
+          while(queue.length){
+            const child=queue.shift();
+            if(child.id===id)return child;
+            queue.push(...child.children);
+          }
+          return null;
+        },
+        addEventListener(name,callback){this.listeners.set(name,callback);},
+        dispatch(name){this.listeners.get(name)?.();},
+        remove(){elements.delete(this.id);}
+      };
+    },
     addEventListener(name,callback){const listeners=events.get(name)||[];listeners.push(callback);events.set(name,listeners);}
   };
   const location={pathname,protocol:'https:',hostname:'www.chess.com'};
@@ -53,9 +76,18 @@ function harness(respond,pathname='/play/computer',options=null){
     }}}
   };
   if(options){
+    const storageListeners=[];
     context.chrome.storage={
-      local:{get(_defaults,callback){callback(options);}},
-      onChanged:{addListener(){}}
+      local:{
+        get(_defaults,callback){callback(options);},
+        set(values){
+          Object.assign(options,values);
+          const changes=Object.fromEntries(Object.entries(values).map(([key,value])=>
+            [key,{newValue:value}]));
+          for(const listener of storageListeners)listener(changes,'local');
+        }
+      },
+      onChanged:{addListener(callback){storageListeners.push(callback);}}
     };
   }
   vm.runInNewContext(source,context);
@@ -63,7 +95,7 @@ function harness(respond,pathname='/play/computer',options=null){
     state,requests,controlRequests,serverState,document,location,
     get reads(){return reads;},
     get timerCount(){return timers.size;},
-    get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
+    get text(){return elements.get('chess-study-no-share-overlay')?.querySelector('#chess-study-no-share-message')?.textContent;},
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
     visibility(hidden){document.hidden=hidden;for(const listener of events.get('visibilitychange')||[])listener();},
     key(key,overrides={}){for(const listener of events.get('keydown')||[])listener({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
@@ -86,7 +118,28 @@ test('default engine request uses one second',async()=>{
   await h.advance(0);
   const first=h.requests.find(message=>message.action==='analyze');
   assert.equal(first.seconds,1);
+  assert.equal(first.elo,1650);
 });
+test('changing practice slider recomputes the same position immediately',async()=>{
+  const h=harness(undefined,'/play/computer',{
+    playerSide:'w',thinkSeconds:1,strengthElo:1650,showDetails:false
+  });
+  await h.advance(0);
+  const before=h.requests.filter(x=>x.action==='analyze');
+  assert.equal(before.length,1);
+  assert.equal(before[0].elo,1650);
+  const slider=h.document.getElementById('chess-study-elo-range');
+  assert.ok(slider);
+  slider.value='1900';
+  slider.dispatch('input');
+  slider.dispatch('change');
+  await h.advance(0);
+  const after=h.requests.filter(x=>x.action==='analyze');
+  assert.equal(after.length,2);
+  assert.equal(after.at(-1).elo,1900);
+  assert.equal(h.document.getElementById('chess-study-elo-value').textContent,'1900');
+});
+
 test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);
   assert.equal(h.text,'Move pawn from e2 to e4');
@@ -165,8 +218,8 @@ test('new games on a reused board restart from the initial position',async()=>{
   assert.equal(h.requests.at(-1).fen,initial+' w KQkq - 0 1');
 });
 
-test('all supported Chess.com routes share the same engine and H-key controls',async()=>{
-  for(const route of ['/play/online','/game/live/123','/analysis','/play/computer']){
+test('practice routes share the same engine and H-key controls',async()=>{
+  for(const route of ['/analysis','/play/computer','/puzzles']){
     const h=harness(undefined,route);
     await h.advance(0);
     assert.equal(h.text,'Move pawn from e2 to e4');
@@ -177,6 +230,15 @@ test('all supported Chess.com routes share the same engine and H-key controls',a
     h.key('h');
     await h.advance(0);
     assert.equal(h.text,'Move pawn from e2 to e4');
+  }
+});
+
+test('live human-game routes never request engine recommendations',async()=>{
+  for(const route of ['/play/online','/game/live/123']){
+    const h=harness(undefined,route);
+    await h.advance(5000);
+    assert.equal(h.text,undefined);
+    assert.equal(h.requests.length,0);
   }
 });
 
@@ -265,7 +327,7 @@ test('optional analysis diagnostics render on practice pages only',async()=>{
   assert.equal(practice.requests.at(-1).seconds,1);
   const other=harness(respond,'/play/online',settings);
   await other.advance(0);
-  assert.equal(other.text,'Move pawn from e2 to e4');
+  assert.equal(other.text,undefined);
 });
 test('transient malformed board recovers without another mutation event',async()=>{
   const h=harness();await h.advance(0);

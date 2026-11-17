@@ -10,14 +10,22 @@
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
-  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false,coachHidden:false};
+  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1650,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
+    settings.strengthElo=Number.isInteger(values.strengthElo)&&
+      values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1650;
+    const slider=document.getElementById("chess-study-elo-range");
+    if(slider)slider.value=String(settings.strengthElo);
+    const value=document.getElementById("chess-study-elo-value");
+    if(value)value.textContent=String(settings.strengthElo);
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
+    // Discard results computed under an old strength while a request is pending.
+    generation++;dirty=true;
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
@@ -42,7 +50,8 @@
 
   function eligible(){
     return location.protocol==="https:"&&
-      (location.hostname==="www.chess.com"||location.hostname==="chess.com");
+      (location.hostname==="www.chess.com"||location.hostname==="chess.com")&&
+      /^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname);
   }
   // Route-independent visibility: supported Chess.com pages use the same coach controls.
   const active=()=>eligible()&&!document.hidden&&!coachHidden;
@@ -54,11 +63,36 @@
     if(!element){
       element=document.createElement("div");
       element.id="chess-study-no-share-overlay";
-      element.setAttribute("role","status");
-      element.setAttribute("aria-live","polite");
+      const text=document.createElement("div");
+      text.id="chess-study-no-share-message";
+      text.setAttribute("role","status");
+      text.setAttribute("aria-live","polite");
+      element.appendChild(text);
+      const label=document.createElement("label");
+      label.id="chess-study-elo-control";
+      label.textContent="Strength: ";
+      const output=document.createElement("output");
+      output.id="chess-study-elo-value";
+      output.textContent=String(settings.strengthElo);
+      const input=document.createElement("input");
+      input.id="chess-study-elo-range";
+      input.type="range";input.min="1320";input.max="3190";input.step="10";
+      input.value=String(settings.strengthElo);
+      input.setAttribute("aria-label","Approximate Stockfish practice Elo");
+      input.addEventListener("input",()=>{output.textContent=input.value;});
+      input.addEventListener("change",()=>{
+        const elo=Number(input.value);
+        if(Number.isInteger(elo)&&elo>=1320&&elo<=3190)
+          chrome.storage?.local?.set?.({strengthElo:elo});
+      });
+      label.append(output,input);
+      element.appendChild(label);
       document.body.appendChild(element);
     }
-    if(message!==lastText){element.textContent=message;lastText=message;}
+    if(message!==lastText){
+      element.querySelector("#chess-study-no-share-message").textContent=message;
+      lastText=message;
+    }
   }
 
   function reset(){
@@ -210,7 +244,7 @@
       analysisPending=currentFen.split(" ")[1]===side;
       if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
       show("Analyzing…");
-      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds});
+      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
       analysisPending=false;retryAt=0;

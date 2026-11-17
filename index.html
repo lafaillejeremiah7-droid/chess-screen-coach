@@ -11,7 +11,7 @@
   <main class="layout">
     <header>
       <h1>Python Chess Screen Coach</h1>
-      <p>Main coach: Stockfish 19 · 1400 approximate UCI Elo by default · 1-second searches.</p>
+      <p>Main coach: Stockfish 19 · adjustable approximate UCI Elo · 1-second searches.</p>
       <p><a style="color:#9cc8ed" href="/training.html">Adaptive 100-position training</a> · <a style="color:#9cc8ed" href="/sparring.html">Play an adjustable-strength Stockfish opponent</a></p>
       <p>Press H to hide/show the coach and its floating move display.</p>
     </header>
@@ -27,6 +27,9 @@
       <label class="file">Upload screenshot<input id="upload" type="file" accept="image/*" hidden></label>
     </div>
     <div class="controls">
+      <label>Practice suggestion strength: <output id="strengthValue">1650</output> UCI Elo
+        <input id="strengthElo" type="range" min="1320" max="3190" step="10" value="1650" aria-label="Approximate practice suggestion Elo">
+      </label>
       <label>Board bottom
         <select id="orientation"><option value="white">White</option><option value="black">Black</option></select>
       </label>

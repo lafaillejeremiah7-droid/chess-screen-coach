@@ -1,6 +1,6 @@
 """Audit main coach move strength against Stockfish 19 reference configurations.
 
-The experiment verifies the real server.analyze_fen() pathway at 1s/move.
+The experiment verifies the real server.analyze_fen() pathway at 1s/move with explicit Elo 1400.
 This is a comparative move-quality check, NOT an absolute 1400 Elo rating test:
 the UCI_Elo scale is engine-calibrated at a different time control, and no
 external human-calibrated opponent pool participates in this experiment.
@@ -61,8 +61,8 @@ def main() -> None:
     args=parser.parse_args()
     if args.seconds != server.ANALYSIS_SECONDS:
         raise ValueError("Audit must use the actual 1-second main-coach default")
-    if server.MAIN_COACH_ELO != 1400:
-        raise RuntimeError("The main-coach configured Elo is not 1400")
+    if server.MAIN_COACH_ELO != 1650:
+        raise RuntimeError("The main-coach default Elo is not 1650")
     records=sample_positions(args.positions,args.seed)
     path=server.stockfish_location()
     server.coach_control(False)
@@ -81,7 +81,7 @@ def main() -> None:
             server.ENGINE=main_engine
             for n,record in enumerate(records,start=1):
                 board=chess.Board(record["fen"])
-                response=server.analyze_fen(board.fen(),args.seconds)
+                response=server.analyze_fen(board.fen(),args.seconds,elo=1400)
                 main_move=valid_move(board,chess.Move.from_uci(
                     response["from"]+response["to"]+
                     ("q" if "promote to queen" in response["instruction"] else
@@ -114,7 +114,7 @@ def main() -> None:
         "note":"COMPARATIVE TEST ONLY: No absolute Elo or human 1400 calibration is established.",
         "engine":"Stockfish 19",
         "tested_main_analysis_pathway":True,
-        "main_uci_elo":server.MAIN_COACH_ELO,
+        "main_uci_elo":1400,
         "main_limited_strength":True,
         "reference_limited_elo":2200,
         "unrestricted_reference":True,
