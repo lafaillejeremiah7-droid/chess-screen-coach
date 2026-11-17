@@ -9,7 +9,7 @@ The Chrome extension, web dashboard, training page, and sparring page share one 
 - **Main coach (`server.py`):** Stockfish 19 with `UCI_LimitStrength=true` and approximate `UCI_Elo=1400` by default; one thread, 16 MiB hash, and **one-second searches** by default. The extension can select 0.2, 0.5, 1, or 2 seconds, with previously saved choices preserved.
 - **Web dashboard (`http://127.0.0.1:8765/`):** Optional screen sharing or image upload for board recognition, manual FEN analysis, and a small movable Document Picture-in-Picture display. Screen frames stay in the browser; only FEN and other chess data are sent to the local server.
 - **Training (`/training.html`):** Up to 100 timed positions in a session, unrestricted engine scoring, and locally saved weakness/review progress. The main coach's 1400 setting is restored after training evaluations.
-- **Sparring (`/sparring.html`):** Play White against a separate Stockfish 19 process as Black. Select an approximate 1400–3000 UCI Elo; the standalone opponent initially selects **2000**, independently of the main coach's 1400 default.
+- **Sparring (`/sparring.html`):** Play White against a separate Stockfish 19 process as Black. Select an approximate 1400–3000 UCI Elo, including **1650 (+250 relative to the main coach’s 1400 target)**; the standalone opponent initially selects **2000**, independently of the main coach. This preset changes only offline sparring, not the Chrome extension or main move-recommendation service.
 
 The numerical UCI Elo setting is **not** an official FIDE, CCRL, or Chess.com rating. Engine recommendations in live games against human opponents can violate platform fair-play rules.
 
