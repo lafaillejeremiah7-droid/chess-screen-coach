@@ -20,6 +20,7 @@
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
+    generation++; // Invalidate an in-flight answer from the previous strength.
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
