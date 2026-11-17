@@ -218,10 +218,6 @@ test('changed FEN metadata invalidates pending analysis even with identical piec
   await flush();
   // The dirty-board retry is intentionally debounced by 180 ms.
   await h.advance(180);
-  console.log('FEN_RETRY_DEBUG',JSON.stringify({
-    attempts,text:h.text,timers:h.timerCount,requests:h.requests,
-    currentFen:h.state.fen
-  }));
   assert.equal(attempts,2);
   assert.equal(h.requests.filter(r=>r.action==='analyze').at(-1).fen,h.state.fen);
   assert.notEqual(h.text,'Outdated result');
