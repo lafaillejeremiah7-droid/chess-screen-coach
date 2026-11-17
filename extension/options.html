@@ -30,6 +30,9 @@
       <option value="2">2 seconds — more CPU use</option>
     </select>
     <small>One Stockfish thread and 16 MiB hash. Longer searches may find better moves but use more CPU.</small>
+    <label for="strengthElo">Practice suggestion strength: <output id="strengthValue">1650</output> UCI Elo</label>
+    <input id="strengthElo" type="range" min="1320" max="3190" step="10" value="1650" style="display:block;width:100%;max-width:350px">
+    <small>Change the strength at any point on the practice board itself. Not available on live games against people.</small>
     <label><input type="checkbox" id="showDetails">Show search depth, evaluation, and factual move details</label>
     <small>Extra details are displayed on personal analysis and computer/practice pages.</small>
     <button type="submit">Save settings</button>
