@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
        typeof body.placement==="string"&&body.placement.length<=90:
      typeof body.fen==="string"&&body.fen.length<=120&&
        (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds)) &&
-       (body.elo===undefined||(Number.isInteger(body.elo)&&body.elo>=1320&&body.elo<=3190)));
+       (body.elo===undefined||body.elo==="full"||(Number.isInteger(body.elo)&&body.elo>=1320&&body.elo<=3190)));
   if(!valid){sendResponse({ok:false,error:"Invalid chess position"});return false;}
   (async()=>{
     const controller=new AbortController();
