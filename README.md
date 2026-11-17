@@ -111,11 +111,11 @@ used by the extension. Linux and Stockfish still require memory.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 
-**Limitations:** Start from the initial position. If you open a game already
-in progress, the initial turn/castling status is not knowable from pieces
-alone; use the manual FEN feature on the existing dashboard or restart a bot
-game. If more than two half-moves happen between checks or Chess.com changes
-its page structure, tracking stops rather than showing an unverified move.
+**Limitations:** When you open a game already in progress, the extension
+can reconstruct the position only if the page exposes a matching full FEN or
+a complete legal move history. Pieces alone cannot establish the move count,
+turn or castling rights. If neither source is available, resynchronization
+is required. If Chess.com changes its page structure, tracking may stop.
 The extension reads Chess.com DOM boards and compatible piece/data-square markup, **not** your Chromebook
 desktop or other applications. It has not been tested on your particular
 Chromebook.
@@ -124,12 +124,12 @@ Chromebook.
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip stockfish
+sudo apt install -y python3 python3-venv python3-pip git
 cd ~/chess-screen-coach
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 server.py
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/check_stockfish19_ready.py --install
+.venv/bin/python server.py
 ```
 
 If `cd ~/chess-screen-coach` reports a missing directory, run
@@ -140,7 +140,8 @@ already exists.**
 ---
 
 
-This is a **local Python chess coach** for puzzles, bot games, personal practice, and post-game review. It uses browser screen sharing to observe a chessboard, reads pieces from the captured image with local templates, then asks **Python + Stockfish** for the strongest legal move.
+This is a **local Python chess coach** for puzzles, bot games, personal practice, and post-game review. It uses browser screen sharing to observe a chessboard, reads pieces from the captured image with local templates, then asks **Python + Stockfish 19** for a legal move under the main bot's
+permanent approximate **1400 UCI Elo** setting.
 
 The large display and Chrome floating window show **only** the requested instruction, e.g.:
 
@@ -156,13 +157,13 @@ The large display and Chrome floating window show **only** the requested instruc
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv stockfish git
+sudo apt install -y python3 python3-venv python3-pip git
 git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git
 cd chess-screen-coach
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python server.py
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/check_stockfish19_ready.py --install
+.venv/bin/python server.py
 ```
 
 4. Open **http://localhost:8765** in desktop Chrome. Keep the Python terminal running.
