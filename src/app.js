@@ -11,6 +11,8 @@ const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
 let previewTimer=null, captureInterrupted=false,coachHidden=false,wasFloating=false,lastControlAt=0;
+let captureVersion=0;
+function invalidateCapture(){captureVersion++;requestNumber++;}
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
 const status = message => { $('status').textContent=message; };
@@ -41,6 +43,7 @@ function setupSize(width,height) {
   frame.height=canvas.height=Math.max(1,Math.round(height*scale));
   crop=null;
   currentFen=null;
+  invalidateCapture();
 }
 
 function captureIsBlack(){
@@ -110,6 +113,7 @@ canvas.addEventListener('pointerup', async () => {
   if (size<64) {status('Select the entire chessboard, not just one square.');return;}
   crop={x,y,size};
   currentFen=null;
+  invalidateCapture();
   display('Move — to —');
   status('Board selected. Reading position...');
   await readNow(true);
@@ -119,7 +123,8 @@ $('share').onclick = async () => {
   try {
     if (!navigator.mediaDevices?.getDisplayMedia) throw Error('Desktop Chrome screen sharing required.');
     stream?.getTracks().forEach(t=>t.stop());
-    stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:4},audio:false});
+    const acquired=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:4},audio:false});
+    stream=acquired;
     video=document.createElement('video');
     video.muted=true; video.autoplay=true; video.playsInline=true;
     video.srcObject=stream;
@@ -129,14 +134,20 @@ $('share').onclick = async () => {
     animate();
     $('placeholder').hidden=true;
     status('Drag over the chessboard in the preview.');
-    stream.getVideoTracks()[0].addEventListener('ended',()=>{
-      stream=null;video=null;
+    acquired.getVideoTracks()[0].addEventListener('ended',()=>{
+      if(stream!==acquired)return;
+      invalidateCapture();
+      stream=null;video=null;currentFen=null;
+      display('Move — to —');
       status('Screen sharing ended.');
     });
   } catch(error){status(error.message);}
 };
 $('stop').onclick=()=>{
+  invalidateCapture();
   stream?.getTracks().forEach(t=>t.stop());stream=null;video=null;
+  currentFen=null;
+  display('Move — to —');
   status('Screen sharing stopped.');
 };
 $('upload').onchange=async event=>{
@@ -178,6 +189,7 @@ async function recommend(fen) {
 
 async function readNow(resync=false) {
   if(busy||!crop||coachHidden)return;
+  const epoch=captureVersion;
   busy=true;
   try {
     if (!templates) throw Error('Board recognition templates are not ready.');
@@ -201,6 +213,7 @@ async function readNow(resync=false) {
     captureInterrupted=false;
     const orientation=$('orientation').value;
     const result=await readBoard(frame,crop,templates,orientation);
+    if(epoch!==captureVersion||coachHidden)return;
     if (result.lowConfidence>6)
       throw Error('Board recognition is uncertain. Select a clearer board or paste a FEN.');
     const observed=placement(result.fen);
@@ -210,6 +223,7 @@ async function readNow(resync=false) {
       $('fen').value=fen;
     } else if (placement(currentFen)!==observed) {
       const tracked=await api('/api/track',{previous:currentFen,placement:observed});
+      if(epoch!==captureVersion||coachHidden)return;
       currentFen=tracked.fen;
       $('fen').value=currentFen;
     } else if (!recovered) return;
@@ -220,19 +234,24 @@ async function readNow(resync=false) {
       status('Position tracked. Waiting for your side to move.');
     } else await recommend(currentFen);
   }catch(error){
+    if(epoch!==captureVersion||coachHidden)return;
     captureInterrupted=true;
     ++requestNumber;
     display('Move — to —');
     status(error.message+' Use Read / resync board if moves were missed.');
-  }finally{busy=false;}
+  }finally{
+    busy=false;
+    if(epoch!==captureVersion&&crop&&(stream||screenshot)&&!coachHidden)
+      void readNow(true);
+  }
 }
 
 $('resync').onclick=()=>readNow(true);
 $('orientation').onchange=()=>{
-  currentFen=null;
+  invalidateCapture();currentFen=null;
   status('Board orientation changed. Select Read / resync board.');
 };
-$('turn').onchange=()=>{currentFen=null;status('Turn changed. Select Read / resync board.');};
+$('turn').onchange=()=>{invalidateCapture();currentFen=null;status('Turn changed. Select Read / resync board.');};
 $('myColor').onchange=()=>{
   if(currentFen && currentFen.split(' ')[1]===$('myColor').value) recommend(currentFen);
   else display('Waiting for your turn');
@@ -270,7 +289,7 @@ $('float').onclick=()=>{if(!coachHidden)void openFloating();};
 function updatePaused(hidden){
   if(coachHidden===hidden)return;
   coachHidden=hidden;
-  ++requestNumber; // Any pending move response is now stale.
+  invalidateCapture(); // Pending recognition and move responses are stale.
   document.body.classList.toggle('coach-paused',hidden);
   if(hidden){
     if(pipWin && !pipWin.closed){

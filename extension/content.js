@@ -154,8 +154,9 @@
       const positionKey=currentFen+"|"+placement;
       // A rejected board must change before another two-ply search is useful.
       if(positionKey===rejectedPosition)return;
-      if(!currentFen&&placement!==reader.initial&&!snapshot.fen){
-        show("Start from the initial position, or enter FEN in the analysis dashboard.");
+      if(!currentFen&&placement!==reader.initial&&!snapshot.fen&&
+         !(Array.isArray(snapshot.moves)&&snapshot.moves.length)){
+        show("Start from the initial position, or provide a complete move history or FEN.");
         return;
       }
       if(!healthChecked){
@@ -169,6 +170,16 @@
       let nextFen=currentFen;
       if(snapshot.fen){nextFen=snapshot.fen;}
       else if(placement===reader.initial){nextFen=INITIAL;}
+      else if(!currentFen&&Array.isArray(snapshot.moves)&&snapshot.moves.length){
+        const recovered=await request("recover",{moves:snapshot.moves,placement});
+        if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+        if(!recovered.ok){
+          rejectedPosition=positionKey;
+          show("Move history cannot reconstruct this position. Resync using FEN.");
+          return;
+        }
+        nextFen=recovered.fen;
+      }
       else if(placement!==lastPlacement){
         const tracked=await request("track",{previous:currentFen,placement});
         if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}

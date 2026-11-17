@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const pieces={K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"\u265F\uFE0E"};
 const files="abcdefgh";
-let state=null,selected="",pending=false,records=[];
+let state=null,selected="",pending=false,records=[],gameMoves=[];
 
 function squaresFromFen(fen){
   const ranks=fen.split(" ")[0].split("/");
@@ -64,7 +64,7 @@ async function restart(){
   pending=true;
   try{
     state=await fetchJson("/api/sparring/start");
-    selected="";records=[];$('uci').value="";
+    selected="";records=[];gameMoves=[];$('uci').value="";
     $('moves').replaceChildren();
     feedback("White to move. Choose a piece and then its destination.");
     render();
@@ -82,11 +82,13 @@ async function submit(uci){
   feedback("Stockfish is calculating its reply…");
   try{
     const result=await fetchJson("/api/sparring/turn",{
-      fen:state.fen,move,elo:Number($('elo').value)
+      fen:state.fen,move,elo:Number($('elo').value),moves:gameMoves
     });
     const step=records.length+1;
     const label=step+". "+result.human_san+(result.engine_san?" "+result.engine_san:"");
     records.push(label);
+    gameMoves.push(result.human_uci);
+    if(result.engine_uci)gameMoves.push(result.engine_uci);
     const item=document.createElement("div");item.textContent=label;
     $('moves').appendChild(item);
     state=result;

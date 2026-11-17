@@ -71,6 +71,14 @@ jobs:
               assert status == 200 and move in board.legal_moves
               assert answer["instruction"].startswith("Move ")
               print("Real Stockfish:", answer["instruction"])
+              # Training must temporarily use unrestricted evaluations and
+              # leave the main 1400-UCI-Elo coach usable afterward.
+              status, training = request("/api/training/evaluate",
+                                         {"fen": board.fen(), "move": "e2e4"})
+              assert status == 200 and training["best"] in [
+                  move.uci() for move in board.legal_moves]
+              status, again = request("/api/analyze", {"fen": board.fen()})
+              assert status == 200 and again["from"] and again["to"]
               after = board.copy()
               after.push_uci("e2e4")
               status, tracked = request("/api/track", {

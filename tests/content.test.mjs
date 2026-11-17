@@ -180,6 +180,16 @@ test('all supported Chess.com routes share the same engine and H-key controls',a
   }
 });
 
+test('fresh midgame position can reconstruct FEN from a complete history',async()=>{
+  const h=harness(message=>message.action==='recover'
+    ?{ok:true,fen:e5+' w KQkq - 0 2'}:undefined);
+  h.state.placement=e5;
+  h.state.moves=['e4','e5'];
+  await h.advance(0);
+  assert.deepEqual(h.requests.map(x=>x.action),['health','recover','analyze']);
+  assert.equal(h.requests.at(-1).fen,e5+' w KQkq - 0 2');
+});
+
 test('Chess.com analysis route remains eligible',async()=>{
   const h=harness(undefined,'/analysis');
   await h.advance(0);

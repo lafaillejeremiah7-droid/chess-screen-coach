@@ -121,6 +121,8 @@ class AnalysisWorkloadTests(unittest.TestCase):
         self.assertEqual(answer["from"],"a2")
         self.assertEqual(answer["to"],"a3")
         self.assertEqual(answer["instruction"],"Move pawn from a2 to a3")
+        self.assertIsNone(answer["score_cp"])
+        self.assertIsNone(answer["mate_in"])
 
     def test_busy_engine_does_not_queue_more_searches(self):
         with server.ENGINE_LOCK:
@@ -244,6 +246,31 @@ class AdaptiveTrainingTests(unittest.TestCase):
         self.assertEqual(result["best_san"],"e4")
         self.assertEqual(result["played_san"],"a3")
 
+    def test_training_temporarily_uses_unrestricted_engine_then_restores_1400(self):
+        from training import evaluate_attempt
+        fake=Mock()
+        search=Mock(return_value={
+            "pv":[chess.Move.from_uci("e2e4")],
+            "score":chess.engine.PovScore(chess.engine.Cp(30),chess.WHITE)
+        })
+        result=evaluate_attempt(chess.Board().fen(),"e2e4",
+                                search,threading.Lock(),fake,main_elo=1400)
+        self.assertEqual(result["best"],"e2e4")
+        self.assertEqual(fake.configure.call_args_list[0].args[0],
+                         {"UCI_LimitStrength":False})
+        self.assertEqual(fake.configure.call_args_list[-1].args[0],
+                         {"UCI_LimitStrength":True,"UCI_Elo":1400})
+
+    def test_training_restores_engine_after_failed_search(self):
+        from training import evaluate_attempt
+        fake=Mock()
+        with self.assertRaisesRegex(RuntimeError,"simulated"):
+            evaluate_attempt(chess.Board().fen(),"e2e4",
+                             Mock(side_effect=RuntimeError("simulated")),
+                             threading.Lock(),fake,main_elo=1400)
+        self.assertEqual(fake.configure.call_args_list[-1].args[0],
+                         {"UCI_LimitStrength":True,"UCI_Elo":1400})
+
     def test_hidden_control_blocks_engine_requests(self):
         server.coach_control(True)
         try:
@@ -293,6 +320,8 @@ class SparringTests(unittest.TestCase):
         fake.quit.assert_called_once()
         self.assertEqual(state["human_san"],"e4")
         self.assertEqual(state["engine_san"],"e5")
+        self.assertEqual(state["human_uci"],"e2e4")
+        self.assertEqual(state["engine_uci"],"e7e5")
         self.assertEqual(state["fen"].split(" ")[1],"w")
         self.assertIn("g1f3",state["legal_moves"])
 
@@ -304,6 +333,32 @@ class SparringTests(unittest.TestCase):
                     play_practice_turn(chess.Board().fen(),"e2e4",elo)
         with self.assertRaisesRegex(ValueError,"Illegal White move"):
             play_practice_turn(chess.Board().fen(),"e2e5",2000)
+
+    def test_repetition_draw_uses_complete_practice_history(self):
+        from sparring import play_practice_turn
+        history=[]
+        board=chess.Board()
+        for human,black in [("g1f3","g8f6"),("f3g1","f6g8"),
+                            ("g1f3","g8f6")]:
+            board.push_uci(human);board.push_uci(black)
+            history.extend((human,black))
+        fake=Mock()
+        fake.id={"name":"Stockfish 19"}
+        fake.play.return_value=chess.engine.PlayResult(chess.Move.from_uci("f6g8"),None)
+        # On the third repetition White plays Ng1 and Black returns Ng8.
+        next_board=board.copy(stack=False)
+        next_board.push_uci("f3g1")
+        self.assertFalse(next_board.is_game_over(claim_draw=True))
+        state=play_practice_turn(board.fen(),"f3g1",2000,
+                                 engine_path="unused",engine_factory=lambda _:fake,
+                                 moves=history)
+        self.assertTrue(state["finished"])
+        self.assertIn("threefold",state["status"])
+
+    def test_rejects_corrupt_practice_history(self):
+        from sparring import play_practice_turn
+        with self.assertRaisesRegex(ValueError,"history"):
+            play_practice_turn(chess.Board().fen(),"e2e4",2000,moves=["e2e4"])
 
     def test_rejects_black_turn_and_invalid_engine_identity(self):
         from sparring import play_practice_turn
@@ -328,3 +383,30 @@ class MainCoachStrengthTests(unittest.TestCase):
             "Threads": 1, "Hash": 16,
             "UCI_LimitStrength": True, "UCI_Elo": 1400
         })
+
+
+class LocalApiBoundaryTests(unittest.TestCase):
+    def test_loopback_api_rejects_untrusted_origins_and_host_headers(self):
+        import urllib.request
+        import urllib.error
+        from http.server import ThreadingHTTPServer
+        http=ThreadingHTTPServer(("127.0.0.1",0),server.Handler)
+        thread=threading.Thread(target=http.serve_forever,daemon=True)
+        thread.start()
+        url=f"http://127.0.0.1:{http.server_port}/api/health"
+        try:
+            with urllib.request.urlopen(url, timeout=3) as response:
+                self.assertEqual(response.status,200)
+            for headers in ({"Origin":"https://untrusted.example"},
+                            {"Host":"untrusted.example"},
+                            {"Origin":"null"}):
+                with self.subTest(headers=headers):
+                    with self.assertRaises(urllib.error.HTTPError) as caught:
+                        urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=3)
+                    self.assertEqual(caught.exception.code,403)
+            extension_origin={"Origin":"chrome-extension://"+"a"*32}
+            with urllib.request.urlopen(urllib.request.Request(url,headers=extension_origin),timeout=3) as response:
+                self.assertEqual(response.status,200)
+        finally:
+            http.shutdown()
+            http.server_close()

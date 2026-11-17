@@ -32,7 +32,7 @@ MAIN_COACH_ELO = 1400
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
 MAX_CACHED_POSITIONS = 128
-MAX_BODY = 2048
+MAX_BODY = 8192  # Bounded support for 400-move SAN histories and sparring logs.
 PIECE_NAMES = {
     chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop",
     chess.ROOK: "rook", chess.QUEEN: "queen", chess.KING: "king",
@@ -199,8 +199,12 @@ def analyze_fen(fen: str, seconds: float | None = None) -> dict:
         move = info.get("selected_move")
         if move is None:
             raise RuntimeError("Stockfish did not return a legal move")
+        # The analysis PV may describe a stronger move than Stockfish's
+        # deliberately limited bestmove. Never attribute that PV score to a
+        # different selected move.
         score = info.get("score")
-        pov_score = score.pov(board.turn) if score is not None else None
+        pv = info.get("pv") or []
+        pov_score = score.pov(board.turn) if score is not None and pv and pv[0] == move else None
         answer = {
             "instruction": format_instruction(board, move),
             "from": chess.square_name(move.from_square),
@@ -300,6 +304,23 @@ def recover_from_history(moves: list, placement: str) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def local_request_allowed(self) -> bool:
+        """Reject browser-origin CSRF and DNS-rebinding requests on loopback."""
+        host=(self.headers.get("Host") or "").strip().lower()
+        allowed_hosts={f"127.0.0.1:{self.server.server_port}",
+                       f"localhost:{self.server.server_port}",
+                       "127.0.0.1", "localhost"}
+        if host not in allowed_hosts:
+            return False
+        origin=self.headers.get("Origin")
+        if origin is None:
+            return True  # local tools and direct requests without Origin
+        if origin in {f"http://127.0.0.1:{self.server.server_port}",
+                      f"http://localhost:{self.server.server_port}"}:
+            return True
+        # Chrome's extension background service worker contacts loopback.
+        return re.fullmatch(r"chrome-extension://[a-p]{32}",origin) is not None
+
     def log_message(self, fmt: str, *args) -> None:
         # No image content or chess positions are logged.
         pass
@@ -315,6 +336,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self) -> None:
+        if not self.local_request_allowed():
+            return self.respond_json(403, {"error":"Cross-origin local API request denied"})
         endpoint = urlparse(self.path).path
         if endpoint not in ("/api/analyze", "/api/track", "/api/recover", "/api/control", "/api/training/evaluate", "/api/sparring/turn"):
             return self.respond_json(404, {"error": "Unknown API endpoint"})
@@ -334,10 +357,11 @@ class Handler(BaseHTTPRequestHandler):
             elif endpoint == "/api/training/evaluate":
                 from training import evaluate_attempt
                 result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
-                                          ENGINE_LOCK, ENGINE)
+                                          ENGINE_LOCK, ENGINE, main_elo=MAIN_COACH_ELO)
             elif endpoint == "/api/sparring/turn":
                 from sparring import play_practice_turn
-                result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"))
+                result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"),
+                                            moves=data.get("moves"))
             else:
                 result = analyze_fen(data.get("fen"), data.get("seconds"))
             self.respond_json(200, result)
@@ -347,6 +371,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond_json(503, {"error": str(exc)})
 
     def do_GET(self) -> None:
+        if not self.local_request_allowed():
+            return self.respond_json(403, {"error":"Cross-origin local API request denied"})
         path = unquote(urlparse(self.path).path)
         if path == "/api/control":
             return self.respond_json(200, coach_control())

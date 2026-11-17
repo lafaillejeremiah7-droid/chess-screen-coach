@@ -142,7 +142,7 @@ def _explain(board: chess.Board, played: chess.Move | None,
 
 
 def evaluate_attempt(fen: str, move: str | None, search,
-                     engine_lock: threading.Lock, engine) -> dict:
+                     engine_lock: threading.Lock, engine, main_elo: int | None = None) -> dict:
     """Compare candidate moves using the same Stockfish 19 engine, perspective and budget."""
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
@@ -167,6 +167,10 @@ def evaluate_attempt(fen: str, move: str | None, search,
     if not engine_lock.acquire(blocking=False):
         raise RuntimeError("Engine busy; retry this position")
     try:
+        # Training scores must use unrestricted engine search, not the main
+        # coach's intentionally weakened 1400 UCI Elo configuration.
+        if main_elo is not None:
+            engine.configure({"UCI_LimitStrength": False})
         best_info = search(board, 1.0)
         pv = best_info.get("pv") or []
         if not pv or pv[0] not in board.legal_moves:
@@ -186,4 +190,8 @@ def evaluate_attempt(fen: str, move: str | None, search,
                 "matched_best": played == best,
                 "explanation": _explain(board, played, best, loss)}
     finally:
-        engine_lock.release()
+        try:
+            if main_elo is not None:
+                engine.configure({"UCI_LimitStrength": True, "UCI_Elo": main_elo})
+        finally:
+            engine_lock.release()

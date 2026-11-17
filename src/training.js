@@ -4,6 +4,18 @@ const glyph={K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",k:"♚",q:"♛",r:"
 const STORE="chess-coach-adaptive-v1";
 let bank=[],current=null,selected=null,sessionStarted=false,answered=0,deadline=0;
 let waiting=false,feedback=false,hidden=false,controlChanged=0;
+let sessionToken=0,timerPaused=false,timerRemaining=10000;
+const isPaused=()=>hidden||document.hidden;
+function syncTimerPause(){
+  if(!sessionStarted||!current)return;
+  if(isPaused()&&!timerPaused){
+    timerRemaining=Math.max(0,deadline-Date.now());
+    timerPaused=true;
+  }else if(!isPaused()&&timerPaused){
+    deadline=Date.now()+timerRemaining;
+    timerPaused=false;
+  }
+}
 let history={answered:0,cards:{},themes:{},lossTotal:0,lossCount:0,matched:0,attempts:0};
 try{
   const saved=JSON.parse(localStorage.getItem(STORE)||"null");
@@ -127,16 +139,20 @@ function nextPosition(){
   $('position').textContent="Position "+(answered+1)+" of 100 · "+current.theme.replaceAll("_"," ")+" · "+current.turn+" to move";
   renderBoard(current.fen);
   notice("Predict the best move. Click from/to squares or type a UCI move.");
+  timerRemaining=10000;
+  timerPaused=isPaused();
   deadline=Date.now()+10000;
   updateClock();
 }
 function updateClock(){
   $('clock').textContent=(!sessionStarted||!current)?"10s":
-    hidden?"Paused":waiting||feedback?"—":
+    isPaused()?"Paused":waiting||feedback?"—":
     Math.max(0,Math.ceil((deadline-Date.now())/1000))+"s";
 }
 async function submitMove(forced=null){
-  if(!sessionStarted||!current||waiting||feedback||hidden)return;
+  if(!sessionStarted||!current||waiting||feedback||isPaused())return;
+  const token=sessionToken;
+  const position=current;
   const value=forced===null?$('candidate').value.trim().toLowerCase():forced;
   if(value && !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(value)){
     notice("Enter a UCI move like e2e4, or select the piece and destination.");
@@ -148,35 +164,36 @@ async function submitMove(forced=null){
   try{
     const response=await fetch('/api/training/evaluate',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({fen:current.fen,move:timedOut?null:value})});
+      body:JSON.stringify({fen:position.fen,move:timedOut?null:value})});
     const result=await response.json();
     if(!response.ok)throw Error(result.error||"Engine evaluation failed");
     // H might have hidden the coach while the server was running.
-    if(hidden){notice("Analysis paused. Submit again when visible.");return;}
+    if(token!==sessionToken)return;
+    if(isPaused()){notice("Analysis paused. Submit again when visible.");return;}
     feedback=true;answered++;
-    scheduleReview(current,result);
+    scheduleReview(position,result);
     showStats();
     notice((timedOut?"No move submitted.":'Your move: '+result.played_san+".")+
       "\nStockfish: "+result.best_san+
       "\nCentipawn loss: "+(result.centipawn_loss===null?"not measurable":result.centipawn_loss)+
       "\n"+result.explanation);
-    $('next').hidden=answered>=100?false:false;
+    $('next').hidden=false;
     $('next').textContent=answered>=100?"Finish session":"Next position";
-  }catch(error){notice(error.message+" Try again when the engine is available.");}
+  }catch(error){if(token===sessionToken)notice(error.message+" Try again when the engine is available.");}
   finally{
-    waiting=false;
-    $('submit').disabled=feedback||hidden;
-    updateClock();
+    if(token===sessionToken){
+      waiting=false;
+      $('submit').disabled=feedback||isPaused();
+      updateClock();
+    }
   }
 }
 function updateHidden(paused){
   if(hidden===paused)return;
   hidden=paused;document.body.classList.toggle('trainer-paused',paused);
+  syncTimerPause();
   if(paused){notice("Coach hidden. Press H to show it.");}
-  else{
-    if(sessionStarted&&current&&!feedback&&!waiting)deadline=Date.now()+10000;
-    updateClock();
-  }
+  updateClock();
 }
 document.addEventListener('keydown',event=>{
   if(event.key?.toLowerCase()!=="h"||event.repeat||event.isComposing||
@@ -192,25 +209,28 @@ document.addEventListener('keydown',event=>{
     body:JSON.stringify({hidden:paused})}).catch(()=>{});
 },true);
 $('start').onclick=async()=>{
+  const token=++sessionToken;
   try{
     const response=await fetch('/api/training/positions');
     if(!response.ok)throw Error("Cannot load training positions");
     const data=await response.json();
     if(!Array.isArray(data.positions)||data.positions.length<100)throw Error("Exercise bank is incomplete");
+    if(token!==sessionToken)return;
     bank=data.positions;
-    answered=0;sessionStarted=true;
+    answered=0;sessionStarted=true;waiting=false;feedback=false;
     $('start').textContent="Restart session";
     showStats();
     nextPosition();
-  }catch(error){notice(error.message);}
+  }catch(error){if(token===sessionToken)notice(error.message);}
 };
+document.addEventListener('visibilitychange',()=>{syncTimerPause();updateClock();});
 $('next').onclick=()=>nextPosition();
 $('submit').onclick=()=>void submitMove();
 $('candidate').addEventListener('keydown',event=>{
   if(event.key==="Enter"){event.preventDefault();void submitMove();}
 });
 setInterval(()=>{
-  if(sessionStarted&&current&&!hidden&&!waiting&&!feedback&&Date.now()>=deadline)
+  if(sessionStarted&&current&&!isPaused()&&!waiting&&!feedback&&Date.now()>=deadline)
     void submitMove("");
   updateClock();
 },150);
