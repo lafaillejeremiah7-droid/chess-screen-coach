@@ -224,7 +224,11 @@ async function readNow(resync=false) {
       throw Error('Board recognition is uncertain. Select a clearer board or paste a FEN.');
     const observed=placement(result.fen);
     if (resync || !currentFen) {
-      let fen=currentFen&&placement(currentFen)===observed?currentFen:null;
+      const entered=$('fen').value.trim();
+      const manualOverride=entered!==lastWrittenFen&&
+        entered.split(/\s+/).length===6&&placement(entered)===observed;
+      let fen=manualOverride?entered:
+        (currentFen&&placement(currentFen)===observed?currentFen:null);
       // First attempt a legal transition. A manual resync should not discard
       // real castling, en-passant, turn, or move-clock state when tracking works.
       if(!fen&&currentFen){
