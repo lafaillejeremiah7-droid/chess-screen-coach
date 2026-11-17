@@ -411,7 +411,7 @@ class SparringTests(unittest.TestCase):
 
 class MainCoachStrengthTests(unittest.TestCase):
     def test_main_engine_strength_default_is_1650(self):
-        self.assertEqual(server.MAIN_COACH_ELO, 1400)
+        self.assertEqual(server.MAIN_COACH_ELO, 1650)
         fake=Mock()
         server.configure_main_engine(fake)
         fake.configure.assert_called_once_with({
