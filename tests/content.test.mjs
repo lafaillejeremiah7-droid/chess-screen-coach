@@ -194,6 +194,34 @@ test('rejected positions are not retried until the board changes',async()=>{
   assert.equal(h.requests.filter(r=>r.action==='track').length,2);
 });
 
+test('engine-busy retries promptly instead of waiting ten seconds',async()=>{
+  let attempts=0;
+  const h=harness(message=>message.action==='analyze'&&++attempts===1
+    ?{ok:false,status:503,error:'Engine busy. Keep one coach tab open and try again.'}:undefined);
+  await h.advance(0);
+  assert.equal(attempts,1);
+  await h.advance(1400);
+  assert.equal(attempts,1);
+  await h.advance(100);
+  assert.equal(attempts,2);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('changed FEN metadata invalidates pending analysis even with identical pieces',async()=>{
+  let firstDone,attempts=0;
+  const h=harness(message=>message.action==='analyze'&&++attempts===1
+    ?new Promise(resolve=>{firstDone=resolve;}):undefined);
+  await h.advance(0);
+  h.state.fen=initial+' w - - 1 1';
+  h.mutate();await h.advance(180);
+  firstDone({ok:true,instruction:'Outdated result'});
+  await flush();
+  await h.advance(0);
+  assert.equal(attempts,2);
+  assert.equal(h.requests.filter(r=>r.action==='analyze').at(-1).fen,h.state.fen);
+  assert.notEqual(h.text,'Outdated result');
+});
+
 test('temporary server failures back off and retry the pending analysis',async()=>{
   let attempts=0;
   const h=harness(message=>message.action==='analyze'&&++attempts===1
