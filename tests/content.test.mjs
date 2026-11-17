@@ -120,6 +120,20 @@ test('default engine request uses one second',async()=>{
   assert.equal(first.seconds,1);
   assert.equal(first.elo,1650);
 });
+test('main suggestion overlay permits full-strength practice and switching back',async()=>{
+  const h=harness(undefined,'/play/computer',{
+    playerSide:'w',thinkSeconds:1,strengthElo:'full',showDetails:false
+  });
+  await h.advance(0);
+  assert.equal(h.requests.filter(r=>r.action==='analyze')[0].elo,'full');
+  assert.equal(h.document.getElementById('chess-study-elo-value').textContent,'Full');
+  const slider=h.document.getElementById('chess-study-elo-range');
+  slider.value='1900';slider.dispatch('input');slider.dispatch('change');
+  await h.advance(0);
+  assert.equal(h.requests.filter(r=>r.action==='analyze').at(-1).elo,1900);
+  assert.equal(h.document.getElementById('chess-study-elo-value').textContent,'1900');
+});
+
 test('changing practice slider recomputes the same position immediately',async()=>{
   const h=harness(undefined,'/play/computer',{
     playerSide:'w',thinkSeconds:1,strengthElo:1650,showDetails:false
