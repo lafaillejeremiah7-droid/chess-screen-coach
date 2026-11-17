@@ -1,3 +1,5 @@
+> **Additional reliability corrections:** The standalone sparring game sends its verified move history to the server for repetition detection. A fresh Chess.com position can be reconstructed from an available complete SAN move list.
+
 > **v0.6.4 reliability audit:** Training scoring uses unrestricted Stockfish 19 and restores the main agent's 1400-UCI-Elo configuration afterward. Strength-limited recommendations do not attach evaluation scores belonging to a different top principal variation. Sparring accepts verified complete move history so it can detect repetition draws. The main bot's default remains **1400 UCI Elo** and **one second**.
 
 ## Main agent: verify 1400 strength setting
