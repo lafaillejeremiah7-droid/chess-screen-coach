@@ -1,4 +1,4 @@
-import {INITIAL, boardToFen, loadTemplates, readBoard, isBlackCapture} from './recognition.js';
+import {INITIAL, boardToFen, loadTemplates, readBoard, isBlackCapture, trustedScreenshotFen} from './recognition.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('screen');
@@ -220,7 +220,7 @@ async function readNow(resync=false) {
     const orientation=$('orientation').value;
     const result=await readBoard(frame,crop,templates,orientation);
     if(epoch!==captureVersion||coachHidden)return;
-    if (result.lowConfidence>2)
+    if (result.lowConfidence>6)
       throw Error('Board recognition is uncertain. Select a clearer board or paste a FEN.');
     const observed=placement(result.fen);
     if (resync || !currentFen) {
@@ -236,20 +236,14 @@ async function readNow(resync=false) {
           // More than two missed plies need a trusted full FEN, not guesses.
         }
       }
-      if(!fen&&observed===startingPlacement){
-        // The starting position is the only ordinary screen layout from which
-        // castling rights can safely be initialized without move history.
-        fen=boardToFen(result.board,orientation,$('turn').value,castlingFor(observed),'-');
-      }
       if(!fen){
-        const supplied=$('fen').value.trim();
-        const fields=supplied.split(/\s+/);
-        // Reject a stale FEN auto-filled by an earlier screenshot.
-        if(supplied!==lastWrittenFen&&fields.length===6&&fields[0]===observed){
-          fen=supplied;
-        }else{
-          throw Error('Midgame resync needs an exact full FEN. Piece locations alone cannot establish turn, castling, or en-passant rights. Paste FEN and retry.');
-        }
+        fen=trustedScreenshotFen({
+          observed,
+          priorFen:currentFen||'',
+          suppliedFen:$('fen').value,
+          lastWrittenFen,
+          startingFen:boardToFen(result.board,orientation,$('turn').value,castlingFor(observed),'-')
+        });
       }
       saveTrackedFen(fen);
     } else if (placement(currentFen)!==observed) {
