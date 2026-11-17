@@ -7,7 +7,7 @@
   <style>
     body{font:16px/1.5 system-ui,sans-serif;max-width:560px;margin:2rem auto;padding:0 1.2rem;color:#1e293b}
     label{display:block;font-weight:600;margin-top:1rem}select{display:block;width:100%;max-width:350px;padding:.6rem;margin:.4rem 0}
-    input[type=checkbox]{margin-right:.5rem}button{padding:.65rem 1.2rem;margin-top:1.25rem}
+    input[type=checkbox]{margin-right:.5rem}input[type=range]{display:block;width:100%;max-width:450px;margin:.8rem 0}button{padding:.65rem 1.2rem;margin-top:1.25rem}
     small{display:block;color:#475569}#status{min-height:1.5rem}
   </style>
 </head>
@@ -30,6 +30,10 @@
       <option value="2">2 seconds — more CPU use</option>
     </select>
     <small>One Stockfish thread and 16 MiB hash. Longer searches may find better moves but use more CPU.</small>
+    <label for="engineElo">Main agent strength: <output id="engineEloValue" for="engineElo">1400 UCI Elo</output></label>
+    <input type="range" id="engineElo" min="1320" max="3190" step="10" value="1400">
+    <label><input type="checkbox" id="fullStrength">Full Stockfish 19 strength (no UCI Elo limit)</label>
+    <small>Adjusting this setting updates the main analysis agent automatically, including open tabs, without restarting Python. UCI Elo is approximate; full strength uses your current search-time budget.</small>
     <label><input type="checkbox" id="showDetails">Show search depth, evaluation, and factual move details</label>
     <small>Extra details are displayed on personal analysis and computer/practice pages.</small>
     <button type="submit">Save settings</button>
