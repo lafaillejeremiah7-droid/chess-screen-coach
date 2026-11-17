@@ -307,6 +307,20 @@ class SparringTests(unittest.TestCase):
         self.assertTrue(state["fen"].startswith(chess.STARTING_BOARD_FEN))
         self.assertFalse(state["finished"])
 
+    def test_offline_1650_preset_configures_only_separate_sparring_engine(self):
+        from sparring import play_practice_turn
+        fake = Mock()
+        fake.id = {"name": "Stockfish 19"}
+        fake.play.return_value = chess.engine.PlayResult(chess.Move.from_uci("e7e5"), None)
+        state = play_practice_turn(chess.Board().fen(), "e2e4", 1650,
+                                   engine_path="/path/to/stockfish",
+                                   engine_factory=lambda _: fake)
+        fake.configure.assert_called_once_with({
+            "Threads": 1, "Hash": 16, "UCI_LimitStrength": True, "UCI_Elo": 1650
+        })
+        self.assertEqual(state["engine_uci"], "e7e5")
+        self.assertEqual(server.MAIN_COACH_ELO, 1400)
+
     def test_2000_elo_configured_on_separate_engine(self):
         from sparring import play_practice_turn
         fake=Mock()
