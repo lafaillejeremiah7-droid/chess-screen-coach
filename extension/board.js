@@ -84,19 +84,30 @@
     return encode(cells);
   }
 
-  function visible(board){
+  function visible(board,view){
     const r=board.getBoundingClientRect?.();
     if(!r||r.width<120||r.height<120)return 0;
     const ratio=r.width/r.height;
     if(ratio<0.7||ratio>1.4)return 0;
+    // A large board outside the viewport must not outrank the actual
+    // on-screen board. Test fixtures without geometry retain old behavior.
+    if(view&&Number.isFinite(view.innerWidth)&&Number.isFinite(view.innerHeight)&&
+       Number.isFinite(r.left)&&Number.isFinite(r.top)){
+      const right=Number.isFinite(r.right)?r.right:r.left+r.width;
+      const bottom=Number.isFinite(r.bottom)?r.bottom:r.top+r.height;
+      const width=Math.max(0,Math.min(right,view.innerWidth)-Math.max(r.left,0));
+      const height=Math.max(0,Math.min(bottom,view.innerHeight)-Math.max(r.top,0));
+      return width*height;
+    }
     return r.width*r.height;
   }
 
   function findBoard(doc){
     const boards=[...doc.querySelectorAll(SELECTOR)];
-    // Largest visible board wins; avoid selecting smaller preview boards.
-    return boards.filter(b=>visible(b)&&b.querySelectorAll?.(".piece,[data-piece]").length>=2)
-      .sort((a,b)=>visible(b)-visible(a))[0]||null;
+    // Prefer the largest VISIBLE board, not merely the largest DOM element.
+    const view=doc.defaultView;
+    return boards.filter(b=>visible(b,view)&&b.querySelectorAll?.(".piece,[data-piece]").length>=2)
+      .sort((a,b)=>visible(b,view)-visible(a,view))[0]||null;
   }
 
   function orientation(board){
