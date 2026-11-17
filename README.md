@@ -1,7 +1,7 @@
 # Chess Screen Coach
 
 Local chess practice and analysis with **Python, python-chess, and Stockfish 19**.
-The Chrome extension, web dashboard, training page, and sparring page share one local Python server. The extension does not need screen sharing.
+The Chrome extension, web dashboard, and training page share one local Python server. The extension does not need screen sharing.
 
 ## Current capabilities
 
@@ -9,7 +9,6 @@ The Chrome extension, web dashboard, training page, and sparring page share one 
 - **Main coach (`server.py`):** Stockfish 19 with `UCI_LimitStrength=true`, approximate `UCI_Elo=1650` by default, and an adjustable **1320–3190 UCI Elo** slider on the practice overlay and dashboard, plus **Full strength** (no UCI Elo limit) in extension options. New settings apply to the next analysis without restarting the engine. One thread, 16 MiB hash, and one-second searches by default (also 0.2, 0.5, or 2 seconds).
 - **Web dashboard (`http://127.0.0.1:8765/`):** Optional screen sharing or image upload for board recognition, manual FEN analysis, and a small movable Document Picture-in-Picture display. Screen frames stay in the browser; only FEN and other chess data are sent to the local server.
 - **Training (`/training.html`):** Up to 100 timed positions in a session, unrestricted engine scoring, and locally saved weakness/review progress. The main coach's default 1650 setting is restored after training evaluations.
-- **Sparring (`/sparring.html`):** Play White against a separate Stockfish 19 process as Black. Select an approximate 1400–3000 UCI Elo, including **1650**; the standalone opponent initially selects **2000**, independently of the main coach. Sparring uses its own engine and does not affect the suggestion agent.
 
 The numerical UCI Elo setting is **not** an official FIDE, CCRL, or Chess.com rating. Engine recommendations in live games against human opponents can violate platform fair-play rules.
 
