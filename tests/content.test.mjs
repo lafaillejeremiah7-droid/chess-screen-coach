@@ -86,6 +86,15 @@ test('default engine request uses one second',async()=>{
   await h.advance(0);
   const first=h.requests.find(message=>message.action==='analyze');
   assert.equal(first.seconds,1);
+  assert.equal(first.elo,1400);
+});
+test('saved main-agent strength is sent with analysis',async()=>{
+  const limited=harness(undefined,'/analysis',{playerSide:'w',thinkSeconds:1,strengthElo:2300,fullStrength:false});
+  await limited.advance(0);
+  assert.equal(limited.requests.find(message=>message.action==='analyze').elo,2300);
+  const unlimited=harness(undefined,'/analysis',{playerSide:'w',thinkSeconds:1,strengthElo:2000,fullStrength:true});
+  await unlimited.advance(0);
+  assert.equal(unlimited.requests.find(message=>message.action==='analyze').elo,'full');
 });
 test('unchanged boards are checked periodically without repeated engine requests',async()=>{
   const h=harness();await h.advance(0);

@@ -10,14 +10,17 @@
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
-  const settings={playerSide:"auto",thinkSeconds:1,showDetails:false,coachHidden:false};
+  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:false,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
+    settings.strengthElo=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1400;
+    settings.fullStrength=values.fullStrength===true;
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
+    generation++; // Invalidate an in-flight answer from the previous strength.
     analysisPending=true;settledText=null;retryAt=0;
     schedule(0);
   }
@@ -210,7 +213,7 @@
       analysisPending=currentFen.split(" ")[1]===side;
       if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
       show("Analyzing…");
-      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds});
+      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.fullStrength?"full":settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
       analysisPending=false;retryAt=0;
