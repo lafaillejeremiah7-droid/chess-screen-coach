@@ -7,7 +7,7 @@ const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',impo
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
 test('extension is injected on Chess.com including human-game URLs',()=>{
-  assert.equal(manifest.version,'0.7.1');
+  assert.equal(manifest.version,'0.7.2');
   assert.match(manifest.description,/FULL Stockfish 19/);
   assert.ok(manifest.permissions.includes('storage'));
   assert.ok(manifest.permissions.includes('scripting'));
@@ -60,7 +60,8 @@ test('standalone WASM bridge authorizes Chess.com game URLs but no other hosts',
   assert.ok(responses.every(r=>r.ok&&r.stockfish&&r.standalone));
 });
 
-test('engine requests only allow bounded analysis time',()=>{
+test('engine accepts custom analysis times rather than four hardcoded choices',()=>{
   const src=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
-  assert.match(src,/\[0\.2,0\.5,1,2\]\.includes\(body\.seconds\)/);
+  assert.match(src,/body\.seconds>=0\.1&&body\.seconds<=120/);
+  assert.doesNotMatch(src,/\[0\.2,0\.5,1,2\]\.includes/);
 });
