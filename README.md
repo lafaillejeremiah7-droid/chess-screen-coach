@@ -1,261 +1,45 @@
-# Standalone Chrome extension — v0.7.11 (Full Stockfish 19 default)
+# Full Stockfish 19 — Minimal Chrome Extension
 
-**No Linux Terminal, Python server, screen sharing, or localhost connection is required for the standalone Chrome extension.** It bundles **full Stockfish 19 NNUE (single-threaded WASM)**, a legal-move tracker (chess.js), and an offscreen engine worker. The full engine is the default and **there is no automatic Lite fallback**. The NNUE-containing engine package is around 94 MB and may take longer to start on lower-memory Chromebooks than the previous Lite edition. There is no Python process or local server to start.
+A single-purpose Chrome extension: read the current visible Chess.com board,
+run the **full Stockfish 19 NNUE WASM engine**, and show one move in the top-right corner.
 
-**Compatibility:** Chrome 116 or later is required. The extension uses `chrome.runtime.getContexts()` for offscreen engine startup; pause/resume is managed by the background service worker so it does not depend on storage APIs unavailable in offscreen documents.\n\n**Live-agent behavior (v0.7.2):** There is no game-mode or opponent-type filter: the extension responds to supported Chess.com boards regardless of whether the route is live, analysis, or computer play. Search details can be shown wherever the board is supported. Analysis time is editable from 0.1 to 120 seconds instead of being restricted to four preset choices. Full Stockfish 19 strength remains enabled by default with a one-second search. The pause/resume control and legal-position checks are intentional operational controls, not game-mode restrictions.\n\n**v0.7.3 engine connection fix:** The background service worker checks that the offscreen script has registered its receiver before sending health and analysis messages. It retries delayed startup, recreates a stale offscreen page once, and retries after a lost connection. Full Stockfish 19 remains the only engine, with no Lite fallback. If the engine still cannot start, open `chrome://extensions` → extension **Details** → **Errors**, or click the service worker's **Inspect** link to investigate errors; low-memory Chromebooks may not have enough RAM to run the 99 MB full WASM engine.\n\n**v0.7.4 compact display:** Suggestions and board-status messages appear as a small 11px badge in the upper-right corner instead of a large banner centered above the chessboard. The badge is at most 260px wide, keeps the full instruction readable and retains the extension popup for detailed diagnostics. The engine, default strength and automatic update behavior are unchanged.\n\n**v0.7.5 Resync board:** The Chrome toolbar popup and extension options now have a **Resync board** button. It tells the running Chess.com page script to discard its cached position, abort stale move results, reread the board and regenerate a legal position without reloading Chrome or restarting Stockfish. If opened from the options tab, it will finish when you return to the Chess.com tab. If the game is already underway, the page must expose a usable FEN or move history; the button deliberately refuses to discard a valid tracked position if it cannot reconstruct the midgame state. This is different from **Repair display**, which reinstalls missing page scripts.\n\n**v0.7.6 startup diagnostics:** A lightweight boot listener now initializes before the larger bundled engine-host script. The Chrome background process can distinguish a still-loading host, a JavaScript script-load/parse failure, and an established messaging channel, without starting the 99 MB Stockfish engine merely to check connectivity. Long engine errors appear as the small “Engine offline — check extension” label on Chess.com; the popup still shows the complete reason. This cannot make a broken or blocked offscreen document work by itself, but it prevents a misleading full-screen error and narrows the remaining Chrome-side fault.\n\n**v0.7.7 current-board mode:** The active Chess.com overlay reads the currently displayed pieces afresh for every new position. It no longer requests or replays move history, searches previous positions to reconstruct missed moves, or gets stuck because a multi-move transition was missed. The Resync board button works even for a midgame board without history. When Chess.com supplies a matching full FEN, its turn/castling/en-passant rights are used. Otherwise visible pieces are authoritative but cannot prove side-to-move, castling rights or en passant. The coach labels unverified turn/rule information; it never invents special-move rights. Full Stockfish 19 remains the engine, with 1-second search by default.\n\n**v0.7.8 verified turn detection:** The extension now checks the current board FEN, explicit board turn attributes, Chess.com's active clock class, and an explicit turn-indicator element. Clocks map to White/Black only when their color is declared or top/bottom orientation is verified. Contradictory indicators or an unknown turn suppress engine suggestions; the overlay shows “Turn unknown — waiting for active clock or turn indicator” or “Turn indicators disagree” until data becomes reliable. Clock and indicator state is rechecked once per second, and a turn switch invalidates any outstanding engine response. This does not infer turn from piece positions or move history. Full Stockfish 19 remains bundled.\n\n**v0.7.11 clock mapping fix:** Fixed a reproducible case where an active Chess.com clock had `clock-player-turn` but no White/Black class. The previous version reported `Turn unknown` even when the clock was visibly running. This version verifies current board orientation using the physical screen positions of multiple pieces, and maps the active clock's screen position (above/below the board) to White/Black. Conflicting or unclear evidence still suppresses suggestions. No move history is used. Chrome-site validation is still required because game layouts vary.
+No Python server, dashboard, training mode, popup, settings, Elo cap, or
+game-mode filtering. Stockfish searches for **one second per changed position**
+at full engine strength. It analyzes the side to move, regardless of player color.
+It never reconstructs positions from move history.
 
-## Install the standalone extension on Chromebook
+## Install on Chromebook
 
-1. Open the [Standalone Chrome extension build](https://github.com/lafaillejeremiah7-droid/chess-screen-coach/actions/workflows/standalone-extension.yml) workflow.
-2. Open the newest **successful** workflow run for main. Download the artifact named `chess-screen-coach-standalone-full-v0.7.11` (sign in to GitHub if prompted).
-3. Extract the downloaded ZIP using Chromebook Files. Open the extracted folder and confirm it contains `manifest.json`, `engine-host.js`, and the `engine` folder.
-4. Open `chrome://extensions`, enable Developer mode, remove the old Chess Study Coach, click **Load unpacked**, and select the extracted folder containing `manifest.json`.
-5. Confirm **version 0.7.11** and allow Chess.com site access. Open a Chess.com board and click the extension icon → **Refresh status** or **Repair display**. In Extension options → **Check connection**, the result should say **Standalone Stockfish is ready**.
-6. From then on, Chrome runs the extension when Chess.com is open. **Do not start server.py or leave a terminal open.**
+1. Open **Actions** in this GitHub repository and select **Full Stockfish 19 extension**.
+2. Download the latest successful artifact named **full-stockfish-19-v0.8.0**.
+3. Extract the ZIP. Open Chrome Extensions at chrome://extensions, enable
+   Developer mode, then select **Load unpacked** and choose the extracted folder
+   containing manifest.json.
+4. Refresh the Chess.com tab. A small top-right status shows the move.
 
-**Important:** GitHub's green **Code → Download ZIP** is the *source code*, not the built standalone extension. It does not contain the compiled `engine-host.js` or the bundled Stockfish JS/WASM. Install the GitHub Actions artifact, not the source ZIP.
+Chrome's **Reload** button reloads local extension files, not GitHub changes.
+To update, replace the extracted files and reload the extension and Chess.com tab.
 
-The full engine package is GPL-3.0; its license is included in the built `engine/COPYING-GPL-3.0.txt`. Engine files are verified against the upstream Stockfish.js 19.0.1 release digests during build. All code executes locally, with no remote JavaScript execution.
+## How it works
 
----
+- extension/board.js: reads the current DOM pieces, turn and FEN metadata.
+- extension/content.js: watches the board and displays the move.
+- extension/background.js: starts an offscreen engine host.
+- standalone/engine-host.mjs: runs the pinned Full Stockfish 19 WASM worker.
+- standalone/build.mjs: verifies engine SHA-256 and packages the extension.
 
-## Legacy Python dashboard and earlier versions
+The board reader will wait rather than guess if the side to move cannot be
+verified. If Chess.com does not expose castling or en-passant rights, those
+rights cannot be reconstructed from pieces alone; some special moves may be
+missing from analysis. This is a data limitation, not an Elo or game-mode cap.
 
-The instructions below describe older versions or the optional Python dashboard, **not the standalone v0.7.0 extension**.
+## Build locally
 
-> **v0.6.10 display reliability:** The Chrome toolbar icon now opens a separate **Chess Screen Coach** popup containing the latest on-page instruction or a precise failure state. **Repair display** checks and (when Chrome grants site access) injects missing board/content scripts on the active Chess.com tab. The extension also checks page injection on tab loading and activation. A Shadow DOM status banner isolates the suggestion from Chess.com's CSS. In Extension options, **Repair page script** offers another repair path. This requires installing/reloading the **0.6.10 extension folder**, not merely updating Python in Linux Terminal. The user must grant Chrome extension Site access to Chess.com; the code cannot bypass denied browser permissions. Verify with a bot/practice board.\n\n> **v0.6.9 visible extension troubleshooting:** When Chess Study Coach starts on Chess.com, it displays a high-contrast status line immediately. It then reports whether board recognition, Python health, or move analysis is failing. In **chrome://extensions → Chess Study Coach → Details → Extension options**, click **Check Chess.com page**. This checks whether the actual webpage script was injected, unlike **Check connection**, which only verifies the local Python server. Click **Reload Chess.com tab** to reinitialize a tab after updating the unpacked extension. Chrome must grant Chess Study Coach access to Chess.com. A successful server health check alone cannot confirm webpage injection. No screen-share flow is required for this extension.
+Requires Node.js 22+.
 
-> **v0.6.8 suggestion recovery:** On startup, the Chess.com extension now synchronizes its persisted visible/hidden state with the local Python server. This fixes a session left paused by the previous H-key state. In Chrome extension **Details → Extension options**, use **Check connection** to verify Python/Stockfish or **Resume suggestions** to unpause the extension and local server. The small top-of-page instruction is more legible. To install this update on a Chromebook, update the actual unpacked `extension` folder and reload both the extension and the Chess.com tab; updating only the Linux server does not update an extension loaded from Downloads.
+    npm install --prefix standalone
+    npm run build --prefix standalone
+    npm test --prefix standalone
 
-> **API boundary hardening:** The Python loopback server now rejects unexpected Host headers and cross-site Origin headers, while accepting direct loopback requests and the Chrome extension's service worker origin. A webpage from another site cannot POST to the local coach through ordinary browser requests.
-
-> **Additional reliability corrections:** The standalone sparring game sends its verified move history to the server for repetition detection. A fresh Chess.com position can be reconstructed from an available complete SAN move list.
-
-> **v0.6.4 reliability audit:** Training scoring uses unrestricted Stockfish 19 and restores the main agent's 1400-UCI-Elo configuration afterward. Strength-limited recommendations do not attach evaluation scores belonging to a different top principal variation. Sparring accepts verified complete move history so it can detect repetition draws. The main bot's default remains **1400 UCI Elo** and **one second**.
-
-## Main agent strength
-
-Version 0.6.6 defaults to unrestricted Stockfish 19 with one second per move. A previously saved strength selection takes precedence. To switch an existing profile, enable **Full Stockfish 19 strength** in the extension options and save.
-
-### Verify the optional 1400 setting
-
-Run `.venv/bin/python scripts/audit_main_1400.py --positions 24 --seconds 1` after installing Stockfish 19. The audit tests the *real main-server analysis route* across 24 legal positions, against a separate 2200-limited Stockfish 19 and unrestricted Stockfish 19, with the same one-second search. It reports move agreement and differences. This measures behavior, **not** an independently verified Elo rating; Stockfish UCI Elo is an engine-calibrated estimate under different match conditions, and cannot be equated with Chess.com or FIDE ratings without an external calibrated opponent pool and sufficient completed games. The CI check publishes a JSON artifact. The test does not modify the default engine strength.
-
-> **v0.6.3 main agent default:** The Chrome extension and legacy screenshot dashboard now use **Stockfish 19 with `UCI_LimitStrength=true` and `UCI_Elo=1400`**, configured every time the Python server starts. Importantly, the main bot reads the engine's actual strength-limited UCI `bestmove`, not the stronger top analysis PV. Search time stays **1 second**. This is an approximate UCI engine-strength target, not a Chess.com rating. The separate sparring opponent retains its independently adjustable Elo, and the adaptive practice scorer continues to evaluate the PV. This is not a way to avoid detection or fair-play enforcement.
-
-> **v0.6.2 local sparring:** Open **http://127.0.0.1:8765/sparring.html** to play White against a dedicated Stockfish 19 opponent playing Black. Select a target UCI Elo (1400–3000) and enter moves using the on-page board or UCI notation. The opponent runs in a separate short-lived engine process with `UCI_LimitStrength=true`, so the main analysis engine remains unaffected. No online games are joined or controlled. The numeric Elo target is approximate and does not equal a Chess.com rating.
-
-> **v0.6.1:** The **H** key now hides the Chrome extension overlay and pauses its analysis, and also controls the older dashboard's floating move window through the Python server. Move overlays are compact. If the board advances by more than two half-moves while paused, the extension can recover from a *complete, validated* SAN move history or a matching FEN attribute; without one it stops safely and requests resynchronization. 
->
-> **Adaptive chess practice:** Open **http://127.0.0.1:8765/training.html** to run a 100-position, 10-second-per-position session. You must predict a move before seeing Stockfish's recommendation. Feedback includes the engine move, approximate centipawn loss using equal one-second root searches, and factual explanations. Adaptive weakness scheduling and spaced repetition persist in your browser's local storage. Ensure the local Python server uses Stockfish 19. The exercise bank is generated offline from opening sequences and endgames, not a curated professional puzzle database.
->
-> **v0.6.1 route behavior:** The extension no longer has a route-based analysis restriction. Its H-key visibility toggle and local-engine bridge behave consistently across Chess.com pages. Engine assistance in competitive human games can violate the site's fair-play rules.
-
-# Python Chess Screen Coach
-
-**v0.6.5 display:** Move suggestions use a small, muted text line at the top of
-the Chess.com tab. The line inherits the page's font and text color, with no
-background card, border, or shadow. The full move instruction and H shortcut
-remain available. This changes the appearance; the text is still visible to
-anyone viewing or capturing your screen.
-
-**Stockfish 19 upgrade (experimental branch):** [Installation, verification and A/B engine testing](docs/stockfish19.md). The pinned Stockfish 19 binary is installed locally; GitHub updates alone do not install software on your Chromebook. Existing one-second settings stay unchanged.
-
-> **v0.6.1 extension controls.** Press **H** on a Chess.com tab to hide or resume the entire coach. Hiding removes the overlay and stops board monitoring and new engine requests until resumed. The hidden state is saved across tabs and reloads. The move display is smaller. Default analysis time remains **1 second**. The
-> Python server, Chrome extension, and extension settings agree on this default.
-> Existing user-selected times remain in effect until changed manually.
-> The app still uses locally installed Stockfish. Chromebook performance and
-> installation must be verified on the device.
-
-### v0.5.0 analysis settings
-
-1. On the candidate branch, open `chrome://extensions` → Chess Study Coach
-   → **Details** → **Extension options**. Explicitly choose White or Black
-   if the bottom player and your color are not the same. The Auto setting
-   remembers the first inferred color and does not switch when the board flips.
-   Explicit `data-player-color` metadata takes priority when Auto is chosen.
-2. Choose a bounded analysis time: **0.2, 0.5, 1, or 2 seconds**. Default **1 second**
-   prioritizes stronger move calculation. Select 0.2 seconds for lower CPU use. Search time is passed through the
-   extension and validated by Python; cached results distinguish budgets.
-3. Optionally enable factual analysis details on computer/practice or personal
-   analysis pages: check/capture/castle/mate when applicable, reported search
-   depth, and a side-to-move evaluation. No invented strategic narrative.
-4. Automated tests benchmark at least **110** generated
-   positions (40 opening, 40 middlegame, 30 endgame) using Stockfish. The
-   report includes match rate and estimated centipawn loss versus longer
-   same-engine analysis; it is **not** a playing Elo estimate, proof of optimal
-   moves, or a measurement of your Chromebook's performance.
-5. After installing this version, verify ChromeOS CPU usage, actual player
-   color, board parsing, and analysis results in a fresh **bot** game. Your
-   existing 0.4.2 installation will remain installed until you replace it.
-
-
-## Recommended on Chromebook: no-screen-share Chrome extension
-
-**This avoids the screen-sharing video stream.** The extension reads chess piece
-classes from the visible Chess.com webpage, converts them to FEN, sends that
-text to your local Python server, and displays a single instruction at the
-top of the chess tab. No screenshots, video, or microphone permissions.
-
-**Page access (v0.5.0):** The extension can load on Chess.com pages, including
-pages with human games. It only analyzes boards whose piece elements match
-the existing Chess.com DOM reader, and it still needs the local Python server.
-Midgame recovery is automatic only when the board provides a matching full FEN; otherwise a fresh game or verified FEN resync is required.
-Using engine suggestions during games against other people violates Chess.com's
-fair-play rules; this technical update does not change those rules.
-
-### Install the Chrome extension
-
-1. Download the repository ZIP from GitHub (**Code → Download ZIP**) and extract it
-   using the Chromebook Files app. If you have already cloned the repository,
-   update it using `git pull`.
-2. In Chrome, open `chrome://extensions`.
-3. Enable **Developer mode**, select **Load unpacked**, and open the
-   **extension** folder inside the extracted repository.
-4. Install the local Python dependencies in the Linux Terminal and run
-   `python3 server.py` as shown below. Only FEN chess-position text is sent
-   to `http://127.0.0.1:8765`.
-5. Open Chess.com **Play Bots** at
-   `https://www.chess.com/play/computer`. Start a fresh game from its
-   standard initial position. A small top-of-tab text line appears automatically
-   and shows `Move [piece] from [square] to [square]` on your turn.
-
-You **do not** need to open the old dashboard or click Share Screen.
-The overlay appears where the reader detects a supported board, without a screen-sharing prompt.
-Press **H** while the Chess.com tab is focused to hide the whole coach; press **H** again to resume. The hotkey is ignored while typing in a text field. The separate Python server remains running, but the hidden extension sends no new engine requests. To terminate the server, stop its terminal process.
-
-The extension reads the board after its pieces change, allowing 180 ms for
-animations to settle. An unchanged board causes no repeated board reads or
-Python requests. Hidden tabs pause their timers and board observer, and resume
-when you return. A lightweight check every four seconds retries after missed mutations and finds newly mounted
-boards. Temporary incomplete boards are rechecked, and the largest visible compatible board is preferred. The Python backend tracks up to two legal half-moves between readings.
-
-Stockfish uses **one thread, a 16 MiB hash, and a 1-second search budget by default in v0.5.0**, with
-no background pondering. The hash is only part of its total memory use.
-Recent results are cached; overlapping requests are rejected instead of queued.
-Shorter searches reduce CPU work but can produce weaker moves in difficult
-positions. Tracking errors stop retrying the same position; temporary server
-failures retry after ten seconds. No screen frames or image recognition are
-used by the extension. Linux and Stockfish still require memory.
-
-### Update an existing installation
-
-1. Stop the old Python process with **Ctrl+C**. In your cloned project folder,
-   run `git pull --ff-only`, then `.venv/bin/python server.py`.
-2. If your unpacked extension points to a downloaded ZIP, download and extract
-   the new repository ZIP and replace/reload that extension folder too. Updating
-   the Linux clone does not update a separate copy in Downloads.
-3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.10**. Reload the Chess.com tab and start a fresh bot game.
-4. Close the old screen-sharing dashboard and keep one coach tab open while
-   checking whether Chromebook lag has stopped.
-
-**Limitations:** When you open a game already in progress, the extension
-can reconstruct the position only if the page exposes a matching full FEN or
-a complete legal move history. Pieces alone cannot establish the move count,
-turn or castling rights. If neither source is available, resynchronization
-is required. If Chess.com changes its page structure, tracking may stop.
-The extension reads Chess.com DOM boards and compatible piece/data-square markup, **not** your Chromebook
-desktop or other applications. It has not been tested on your particular
-Chromebook.
-
-### Existing Python setup (needed once)
-
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip git
-cd ~/chess-screen-coach
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python scripts/check_stockfish19_ready.py --install
-.venv/bin/python server.py
-```
-
-If `cd ~/chess-screen-coach` reports a missing directory, run
-`git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git`
-from your home folder first. **Do not run `git clone` into a folder that
-already exists.**
-
----
-
-
-This is a **local Python chess coach** for puzzles, bot games, personal practice, and post-game review. It uses browser screen sharing to observe a chessboard, reads pieces from the captured image with local templates, then asks **Python + Stockfish 19** for a legal move under the main bot's
-selected strength setting (full strength by default).
-
-The large display and Chrome floating window show **only** the requested instruction, e.g.:
-
-> Move knight from g8 to f6
-
-**Fair play:** Never use engine assistance in live games against other people where it is prohibited. This tool is meant for permitted analysis.
-
-## Chromebook setup (Linux development environment)
-
-1. On your Chromebook, enable **Settings → Developers → Linux development environment** if it is not already enabled.
-2. Open the Linux Terminal.
-3. Run:
-
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip git
-git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git
-cd chess-screen-coach
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python scripts/check_stockfish19_ready.py --install
-.venv/bin/python server.py
-```
-
-4. Open **http://localhost:8765** in desktop Chrome. Keep the Python terminal running.
-5. Click **Share screen** and choose the chess tab/window containing a *permitted practice position*. In the preview, drag a square around the full board.
-6. Set **Board bottom**, **My pieces**, and **Whose turn when starting?**. The app will read the selected area and then check every two seconds for a single legal move.
-7. Click **Show floating move at top of screen** for a movable always-on-top Chrome Document Picture-in-Picture window. You can drag the panel to the top. This requires a supported desktop Chrome browser and a click to open it.
-
-For a screenshot: select **Upload screenshot**, then select the board area. To correct recognition or missed moves, use **Read / resync board** or the FEN field.
-
-### How it works
-
-- Browser JavaScript requests screen sharing (a browser security requirement) and does local image template recognition.
-- The recognized FEN goes to your own `127.0.0.1:8765` Python server.
-- Python validates the FEN with `python-chess`; Stockfish runs as a local subprocess. It returns the move in plain English.
-- Python also tracks **one legal move between captures**, preserving turn and castling rights.
-
-No screenshots are uploaded. Only chess position text is sent to the Python server on your Chromebook. The Python server binds to loopback and is not public.
-
-### Limitations
-
-- Board recognition is calibrated to the default green Chess.com board/piece style. Errors are possible. Verify positions before relying on suggestions.
-- The first image cannot reveal whose turn it is, en passant rights, or whether a king/rook moved. Set initial turn explicitly and choose castling rights if needed.
-- A missed pair of moves cannot be safely inferred. Use **Read / resync board** and set the actual turn; manually enter FEN for reliable recovery.
-- A webpage cannot open a floating window without your click. Chrome's Picture-in-Picture is browser-dependent; it may not work on mobile.
-- This Python app **cannot run on GitHub Pages**, which hosts static sites only. Running `python server.py` locally is required. The old JavaScript-only static-site deployment has been replaced by checks.
-
-### Run tests
-
-```bash
-python -m unittest discover -s tests -p 'test_*.py'
-npm test
-```
-
-If Stockfish is installed in a nonstandard location:
-
-```bash
-STOCKFISH_PATH=/absolute/path/to/stockfish python server.py
-```
-
-### Board reliability scope (introduced in v0.4.2)
-- Reads classic Chess.com `square-52` piece classes and alternate `data-piece`, `data-square`, and algebraic `square-e4` markup.
-- Prefers the largest visible compatible board when a page contains multiple boards.
-- Rechecks temporary animation states and scans periodically for missed DOM updates without repeated Stockfish searches on an unchanged position.
-- Keeps legal-move history when a board is flipped; flipping the visual board does not reset the chess position.
-- Can resume from a midgame board when a matching complete FEN is provided as a board attribute. If no complete legal FEN or move history is exposed, the reader cannot safely infer side to move, castling or en-passant rights from pieces alone.
-- Not a universal OCR system: canvas/WebGL boards, unsupported sites, invisible boards, nonstandard chess variants, or altered chess-piece HTML may still require manual FEN or the legacy screenshot dashboard. No live Chess.com page or Chromebook-specific test has yet been performed.
-
-### Transient black or missing chessboards (introduced in v0.4.2)
-If Chess.com temporarily removes the board or replaces its DOM element during a redraw, the overlay says the board is unavailable instead of retaining a possibly stale move. It keeps the last verified FEN, then resumes when the replacement board matches the known position or can be legally tracked from it. If the site is truly black due to GPU/browser rendering or screen-sharing capture, the extension cannot repair Chrome's rendering; test without the legacy dashboard, reload the tab, and check ChromeOS graphics/memory. If the returned board is more than two half-moves beyond the last verified position, manual FEN resynchronization may still be needed.
-
-### Screen-share capture blackout protection (introduced in v0.4.2)
-The legacy dashboard now detects near-black sampled chessboard frames or paused display-capture tracks. It stops recognition without overwriting the last verified position, indicates a capture problem, and tries again on the next scheduled check. When a readable capture returns, the dashboard can restore the displayed move even if the chess position is unchanged. If the actual Chess.com page itself is black, this does not repair a browser/GPU rendering failure.
-
-### Search-time default change
-
-Version 0.5.0 uses **1 second by default** across the Python API, extension overlay and extension settings. Explicitly saved preferences (including 0.2 seconds) are respected; switching versions does not overwrite user-selected times. The prior 0.4.2 extension does not support analysis-time settings. Installing this version requires both the updated extension and Python server.
+Load dist/extension/ as an unpacked extension. The packaged WASM and its
+GPL license are included in the GitHub Actions artifact.
