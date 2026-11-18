@@ -2,7 +2,16 @@
 (function(){
   "use strict";
   const reader=globalThis.ChessCoachBoard;
-  if(!reader)return;
+  if(!reader){
+    const error=document.createElement("div");
+    error.id="chess-study-no-share-overlay";
+    error.textContent="Chess Study Coach: board reader failed to load. Reload this extension and tab.";
+    (document.body||document.documentElement)?.appendChild(error);
+    return;
+  }
+  // Ignore a second injection into the same extension execution context.
+  if(globalThis.__ChessCoachContentActive)return;
+  globalThis.__ChessCoachContentActive=true;
   const INITIAL=reader.initial+" w KQkq - 0 1";
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
@@ -237,6 +246,8 @@
       if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
       analysisPending=false;retryAt=0;
       settledText=displayInstruction(answer);show(settledText);
+    }catch(error){
+      if(current(epoch))retry("Chess Study Coach error: "+String(error?.message||error));
     }finally{
       processing=false;
       if(dirty){dirty=false;schedule();}
@@ -255,6 +266,7 @@
     if(document.hidden||coachHidden)return;
     if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
     if(currentBoard?.isConnected)watchBoard(currentBoard);
+    show("Chess Study Coach active — checking chessboard…");
     // This lightweight check only discovers a missing/replaced board or route.
     // A connected, unchanged board does not trigger reads or Python requests.
     watchTimer=setInterval(()=>{
@@ -342,6 +354,20 @@
       }
       if(settingsChanged)applySettings(next);
     }
+  });
+  // The settings page can distinguish a missing content script from a missing
+  // chessboard or a local Python/Stockfish failure.
+  chrome.runtime?.onMessage?.addListener?.((message,_sender,sendResponse)=>{
+    if(message?.action!=="coachStatus")return false;
+    let boardFound=false,boardError=null;
+    try{boardFound=!!reader.findBoard(document);}
+    catch(error){boardError=String(error?.message||error);}
+    sendResponse({
+      injected:true,hidden:coachHidden,visible:active(),boardFound,boardError,
+      status:document.getElementById("chess-study-no-share-overlay")?.textContent||"",
+      path:location.pathname
+    });
+    return false;
   });
   // Read the saved hidden state before starting the observer or engine requests.
   if(chrome.storage?.local?.get)
