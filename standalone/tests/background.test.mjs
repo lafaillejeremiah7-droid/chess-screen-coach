@@ -8,24 +8,37 @@ import {dirname,resolve} from "node:path";
 const file=resolve(dirname(fileURLToPath(import.meta.url)),"..","..","extension","background.js");
 const src=readFileSync(file,"utf8");
 
-function harness(){
-  let receiver,offscreenCreates=0,contextChecks=0;
+function harness({delayedPings=0,noListener=false,dropFirstRequest=false,existing=false}={}){
+  let receiver,offscreenCreates=0,contextChecks=0,closed=0,pings=0;
+  let exists=existing;
+  let loseRequest=dropFirstRequest;
   const saved={coachHidden:false};
   const chrome={
     runtime:{
       id:"test-extension",
       getURL:path=>"chrome-extension://test-extension/"+path,
-      getContexts:async()=>{contextChecks++;return [];},
-      sendMessage:async message=>({
-        ok:true,stockfish:true,standalone:true,
-        engine:"Stockfish 19 Lite (WASM)",action:message.action
-      }),
+      getContexts:async()=>{contextChecks++;return exists?[{contextType:"OFFSCREEN_DOCUMENT"}]:[];},
+      sendMessage:async message=>{
+        if(message.target!=="standalone-engine")throw Error("Unexpected target");
+        if(message.action==="ping"){
+          pings++;
+          if(noListener||pings<=delayedPings)
+            throw Error("Could not establish connection. Receiving end does not exist.");
+          return {ok:true,ready:true,host:"offscreen"};
+        }
+        if(loseRequest){
+          loseRequest=false;
+          throw Error("Could not establish connection. Receiving end does not exist.");
+        }
+        return {ok:true,stockfish:true,standalone:true,
+          engine:"Stockfish 19 Full (WASM)",action:message.action};
+      },
       onMessage:{addListener(fn){receiver=fn;}},
       onInstalled:{addListener(){}}
     },
     offscreen:{
-      createDocument:async()=>{offscreenCreates++;}
-      // hasDocument intentionally absent: only available in newer Chrome.
+      createDocument:async()=>{exists=true;offscreenCreates++;},
+      closeDocument:async()=>{exists=false;closed++;}
     },
     storage:{local:{
       get:async defaults=>({...defaults,...saved}),
@@ -38,32 +51,70 @@ function harness(){
       query:async()=>[]
     }
   };
-  vm.runInNewContext(src,{chrome,URL,AbortController,Promise,setTimeout,clearTimeout});
+  const nextTurn=fn=>{queueMicrotask(fn);return 1;};
+  vm.runInNewContext(src,{chrome,URL,AbortController,Promise,
+    setTimeout:nextTurn,clearTimeout:()=>{}});
   const sender={url:"https://www.chess.com/play/computer"};
   function request(action,more={}){
     return new Promise(resolve=>{
       assert.equal(receiver({action,...more},sender,resolve),true);
     });
   }
-  return {chrome,request,invoke:(message,sender,callback)=>receiver(message,sender,callback),saved,get offscreenCreates(){return offscreenCreates;},
-    get contextChecks(){return contextChecks;}};
+  return {chrome,request,saved,
+    invoke:(message,sender,callback)=>receiver(message,sender,callback),
+    get offscreenCreates(){return offscreenCreates;},
+    get contextChecks(){return contextChecks;},
+    get closes(){return closed;},
+    get pings(){return pings;}};
 }
-test("Chrome 116 offscreen creation uses getContexts, not hasDocument",async()=>{
+test("Chrome 116 creates offscreen document and pings host before starting WASM",async()=>{
   const h=harness();
   const response=await h.request("health");
   assert.equal(response.ok,true);
   assert.equal(response.stockfish,true);
   assert.equal(h.contextChecks,1);
   assert.equal(h.offscreenCreates,1);
+  assert.equal(h.pings,1);
 });
-test("pause state uses service-worker storage and never opens offscreen engine",async()=>{
+test("delayed offscreen registration retries without breaking the first connection check",async()=>{
+  const h=harness({delayedPings:3});
+  const response=await h.request("health");
+  assert.equal(response.ok,true);
+  assert.equal(h.pings,4);
+  assert.equal(h.offscreenCreates,1);
+  assert.equal(h.closes,0);
+});
+test("a stale offscreen document is closed and recreated once",async()=>{
+  const h=harness({noListener:true,existing:true});
+  const result=await h.request("health");
+  assert.equal(result.ok,false);
+  assert.match(result.error,/offscreen engine script did not start/i);
+  assert.match(result.error,/chrome:\/\/extensions/);
+  assert.equal(h.closes,1);
+  assert.equal(h.offscreenCreates,1);
+  assert.equal(h.pings,40);
+});
+test("if host disappears after handshake, reconnect once and retry request",async()=>{
+  const h=harness({dropFirstRequest:true});
+  const result=await h.request("health");
+  assert.equal(result.ok,true);
+  assert.equal(result.stockfish,true);
+  assert.equal(h.closes,1);
+  assert.equal(h.offscreenCreates,2);
+});
+test("concurrent engine checks share one offscreen creation",async()=>{
+  const h=harness({delayedPings:2});
+  const results=await Promise.all([h.request("health"),h.request("health")]);
+  assert.ok(results.every(x=>x.ok&&x.stockfish));
+  assert.equal(h.offscreenCreates,1);
+});
+test("pause state uses service-worker storage without opening offscreen engine",async()=>{
   const h=harness();
   const a=await h.request("control",{hidden:true});
   assert.equal(a.ok,true);
   assert.equal(a.hidden,true);
   assert.equal(h.saved.coachHidden,true);
   assert.equal(h.contextChecks,0);
-  assert.equal(h.offscreenCreates,0);
   const b=await h.request("control",{hidden:false});
   assert.equal(b.ok,true);
   assert.equal(b.hidden,false);

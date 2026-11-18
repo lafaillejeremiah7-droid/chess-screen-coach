@@ -7,7 +7,7 @@ const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',impo
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
 test('extension is injected on Chess.com including human-game URLs',()=>{
-  assert.equal(manifest.version,'0.7.2');
+  assert.equal(manifest.version,'0.7.3');
   assert.match(manifest.description,/FULL Stockfish 19/);
   assert.ok(manifest.permissions.includes('storage'));
   assert.ok(manifest.permissions.includes('scripting'));
@@ -35,7 +35,9 @@ test('standalone WASM bridge authorizes Chess.com game URLs but no other hosts',
       offscreen:{createDocument:async()=>{}},
       runtime:{id:'extension-id',getURL:path=>'chrome-extension://extension-id/'+path,
         getContexts:async()=>[{contextType:'OFFSCREEN_DOCUMENT'}],
-        sendMessage:async()=>({ok:true,stockfish:true,standalone:true}),
+        sendMessage:async message=>message.action==="ping"
+          ?{ok:true,ready:true,host:"offscreen"}
+          :{ok:true,stockfish:true,standalone:true},
         onMessage:{addListener(fn){listener=fn;}}}
     }
   };

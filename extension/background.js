@@ -76,13 +76,79 @@ async function ensureOffscreen(){
   try{await creatingOffscreen;}
   finally{creatingOffscreen=null;}
 }
-async function engineRequest(action,body){
-  await ensureOffscreen();
+// createDocument() does not prove that engine-host.js has registered its
+// listener. Chrome can create the document before its script is ready.
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+let connectingEngine=null,restartingEngine=null;
+const unreachable=error=>/Receiving end does not exist|Could not establish connection|message port closed|message channel closed/i
+  .test(String(error?.message||error));
+
+async function confirmEngineHost(){
+  let last=null;
+  for(let attempt=0;attempt<20;attempt++){
+    try{
+      // PING never starts the large WASM engine. It only confirms that the
+      // extension-owned offscreen script loaded and registered onMessage.
+      const result=await chrome.runtime.sendMessage({
+        target:"standalone-engine",action:"ping"
+      });
+      if(result?.ok===true&&result?.ready===true)return;
+      last=Error("Offscreen script did not acknowledge the connection");
+    }catch(error){last=error;}
+    if(attempt<19)await pause(200);
+  }
+  throw Error("The offscreen engine script did not start: "+
+    String(last?.message||last||"No receiving context")+
+    ". Open chrome://extensions, select this extension and check Errors.");
+}
+async function connectEngineHost(){
+  if(connectingEngine)return connectingEngine;
+  connectingEngine=(async()=>{
+    await ensureOffscreen();
+    try{
+      await confirmEngineHost();
+    }catch(initialError){
+      // A Chrome crash or interrupted extension update can leave an offscreen
+      // document present without a working message listener. Recreate it once.
+      try{await chrome.offscreen.closeDocument();}
+      catch(error){
+        throw Error("Could not reset stalled offscreen engine: "+
+          String(error?.message||error)+". Original failure: "+
+          String(initialError?.message||initialError));
+      }
+      await ensureOffscreen();
+      await confirmEngineHost();
+    }
+  })();
+  try{return await connectingEngine;}finally{connectingEngine=null;}
+}
+async function restartEngineHost(){
+  if(restartingEngine)return restartingEngine;
+  restartingEngine=(async()=>{
+    try{await chrome.offscreen.closeDocument();}catch{}
+    await connectEngineHost();
+  })();
+  try{return await restartingEngine;}finally{restartingEngine=null;}
+}
+async function relayEngine(action,body){
   // Only extension-owned offscreen.html receives this targeted message.
-  const response=await chrome.runtime.sendMessage({target:"standalone-engine",action,body});
+  const response=await chrome.runtime.sendMessage({
+    target:"standalone-engine",action,body
+  });
   if(!response||typeof response.ok!=="boolean")
-    throw Error("Standalone engine did not respond. Install the complete built extension.");
+    throw Error("Offscreen engine returned no response. Check extension Errors.");
   return response;
+}
+async function engineRequest(action,body){
+  await connectEngineHost();
+  try{return await relayEngine(action,body);}
+  catch(error){
+    if(!unreachable(error))throw error;
+    // The host disappeared after the ping (e.g. a tab/worker crash).
+    // Recreate once and report a useful failure instead of silently looping.
+    await restartEngineHost();
+    return await relayEngine(action,body);
+  }
 }
 
 chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{

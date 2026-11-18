@@ -46,7 +46,7 @@ function startEngine(){
       engine.onerror=event=>{
         resetEngine(Error("Bundled Stockfish failed to load. Install the standalone extension build, not the source ZIP."));
       };
-      timer=setTimeout(()=>resetEngine(Error("Stockfish WASM initialization timed out. Try reloading the extension.")),25000);
+      timer=setTimeout(()=>resetEngine(Error("Stockfish WASM initialization timed out. Try reloading the extension.")),60000);
       engine.postMessage("uci");
     }catch(error){
       clearTimeout(timer);
@@ -93,6 +93,7 @@ async function analyze(body){
   });
 }
 async function dispatch(action,body={}){
+  if(action==="ping")return {ready:true,host:"offscreen",engine:"Stockfish 19 Full"};
   if(action==="health"){
     await startEngine();
     return {stockfish:true,python:false,standalone:true,engine:"Stockfish 19 Full (single-threaded WASM)"};
