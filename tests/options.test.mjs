@@ -34,7 +34,7 @@ function optionsHarness({tabs=[{id:42,active:false,lastAccessed:123}],reply={
       query(filter,callback){actions.push({action:'query',filter});callback(tabs);},
       sendMessage(tabId,message,callback){
         actions.push({action:'send',tabId,message});
-        callback(message.action==='coachResync'?{ok:true,started:true}:reply);
+        callback(message.action==='coachResync'?{ok:true,started:true,queued:false}:reply);
       },
       reload(tabId,callback){actions.push({action:'reload',tabId});callback();}
     }
