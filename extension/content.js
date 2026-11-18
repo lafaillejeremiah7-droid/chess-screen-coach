@@ -11,21 +11,19 @@
   }
   // Ignore a second injection into the same extension execution context.
   if(globalThis.__ChessCoachContentActive)return;
-  const INITIAL=reader.initial+" w KQkq - 0 1";
-  const SETTLE_MS=180, RETRY_MS=10000;
-  let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
-  let lastSide=null,lastSnapshotKey=null,settledText=null,healthChecked=false,analysisPending=false;
+  const SETTLE_MS=180, RETRY_MS=2000;
+  let currentFen=null,currentBoard=null,lastColor=null;
+  let lastSnapshotKey=null,settledText=null,analysisPending=false;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
-  let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
-  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,showDetails:false,coachHidden:false};
+  let lockedPlayerColor=null,coachHidden=false;
+  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=Number.isFinite(values.thinkSeconds)&&values.thinkSeconds>=0.1&&values.thinkSeconds<=120?values.thinkSeconds:1;
     settings.strengthElo=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1400;
     settings.fullStrength=values.fullStrength!==false;
-    settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);
     generation++; // Invalidate an in-flight answer from the previous strength.
@@ -42,18 +40,7 @@
     if(!lockedPlayerColor)lockedPlayerColor=snapshot.bottomColor||snapshot.myColor||null;
     return lockedPlayerColor;
   }
-  function displayInstruction(answer){
-    // Do not suppress optional search details based on the page's game mode.
-    if(!settings.showDetails)return answer.instruction;
-    const parts=[answer.instruction];
-    if(answer.reason)parts.push(answer.reason);
-    if(Number.isInteger(answer.depth))parts.push("Depth "+answer.depth);
-    if(Number.isInteger(answer.mate_in))parts.push("Mate in "+answer.mate_in+" (side to move)");
-    else if(typeof answer.score_cp==="number")parts.push("Eval "+(answer.score_cp/100).toFixed(2)+" (side to move)");
-    return parts.join(" | ");
-  }
-
-  function eligible(){
+function eligible(){
     return location.protocol==="https:"&&
       (location.hostname==="www.chess.com"||location.hostname==="chess.com");
   }
@@ -120,9 +107,9 @@
   function reset(){
     generation++;
     observer?.disconnect();observer=null;
-    currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
-    healthChecked=false;analysisPending=false;retryAt=0;
-    lastSide=null;lastSnapshotKey=null;settledText=null;badSnapshots=0;lockedPlayerColor=null;
+    currentFen=null;currentBoard=null;lastColor=null;
+    analysisPending=false;retryAt=0;
+    lastSnapshotKey=null;settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
 
@@ -199,8 +186,7 @@
         return;
       }
       if(snapshot.board!==currentBoard){
-        // A site re-render can replace the element without changing the game.
-        // Retain the FEN and verify the next placement by legal-move tracking.
+        // A re-render can replace the board; read the new element.
         currentBoard=snapshot.board;
         lastColor=snapshot.myColor;
         analysisPending=true;settledText=null;
@@ -233,16 +219,7 @@
         return;
       }
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(!healthChecked){
-        const health=await request("health");
-        if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-        if(!health.ok){retry(health.error||"Bundled Stockfish unavailable");return;}
-        if(!health.stockfish){retry("Bundled Stockfish unavailable. Install the standalone extension ZIP.");return;}
-        healthChecked=true;
-      }
       currentFen=position.fen;
-      lastPlacement=snapshot.placement;
-      lastSide=side;
       lastSnapshotKey=boardKey;
       if(!side){
         analysisPending=false;
@@ -272,7 +249,7 @@
       }
       analysisPending=false;retryAt=0;
       const note=!position.rulesVerified?"Rule rights unverified: ":"";
-      settledText=note+displayInstruction(answer);
+      settledText=note+answer.instruction;
       show(settledText);
     }catch(error){
       if(current(epoch))retry("Chess Study Coach error: "+String(error?.message||error));
@@ -335,37 +312,10 @@
     event.stopPropagation?.();
     const hidden=!coachHidden;
     setCoachHidden(hidden);
-    // Keep other Chess.com tabs and reloads in the same hidden/visible state.
-    lastToggleAt=Date.now();
+    // Chrome storage notifies each open tab without a second polling loop.
     try{chrome.storage?.local?.set?.({coachHidden:hidden});}catch{}
-    // Synchronize the old floating-window dashboard through the local server.
-    void request("control",{hidden});
   }
 
-  // A dashboard-side H key can also change the shared server control.
-  // This lightweight sync does not read the board or request analysis.
-  let controlTimer=null,controlRevision=0,controlPolling=false;
-  const syncVisibility=async()=>{
-    if(controlPolling||document.hidden||!eligible()||Date.now()-lastToggleAt<2200)return;
-    controlPolling=true;
-    const revision=controlRevision;
-    const control=await request("control");
-    controlPolling=false;
-    if(document.hidden||revision!==controlRevision)return;
-    if(control?.ok&&typeof control.hidden==="boolean"&&control.hidden!==coachHidden){
-      setCoachHidden(control.hidden);
-      chrome.storage?.local?.set?.({coachHidden:control.hidden});
-    }
-  };
-  const refreshControlWatcher=()=>{
-    controlRevision++;
-    clearInterval(controlTimer);controlTimer=null;
-    if(!document.hidden)controlTimer=setInterval(()=>{void syncVisibility();},2000);
-  };
-  document.addEventListener("visibilitychange",refreshControlWatcher);
-  window.addEventListener("pagehide",()=>{clearInterval(controlTimer);controlTimer=null;});
-  window.addEventListener("pageshow",refreshControlWatcher);
-  refreshControlWatcher();
   document.addEventListener("keydown",handleHotkey,true);
   document.addEventListener("visibilitychange",resume);
   window.addEventListener("pagehide",stopWatching);
@@ -429,17 +379,6 @@
   if(chrome.storage?.local?.get)
     chrome.storage.local.get(settings,values=>{
       applySettings(values);
-      // The persisted Chrome preference is authoritative on startup.
-      // A previous session can leave Python paused even after the tab is visible.
-      lastToggleAt=Date.now();
-      void request("control",{hidden:coachHidden}).then(response=>{
-        // If startup briefly encountered a paused server, retry without
-        // waiting for the normal ten-second error backoff.
-        if(response?.ok&&!coachHidden&&retryAt>Date.now()){
-          retryAt=0;healthChecked=false;analysisPending=true;generation++;
-          schedule(0);
-        }
-      });
       if(!coachHidden)resume();
     });
   else resume();
