@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 
 const source=readFileSync(new URL('../extension/options.js',import.meta.url),'utf8');
-const css=readFileSync(new URL('../extension/overlay.css',import.meta.url),'utf8');
+const content=readFileSync(new URL('../extension/content.js',import.meta.url),'utf8');
 const html=readFileSync(new URL('../extension/options.html',import.meta.url),'utf8');
 
 function optionsHarness({tabs=[{id:42,active:false,lastAccessed:123}],reply={
@@ -94,9 +94,9 @@ test('Resync board in extension options invokes page resync without reloading th
 });
 
 test('visible overlay has a definite contrasting foreground and background',()=>{
-  assert.match(css,/color:\s*#ffffff\s*!important/);
-  assert.match(css,/background:\s*#182633\s*!important/);
-  assert.match(css,/visibility:\s*visible\s*!important/);
+  assert.match(content,/background: #182633/);
+  assert.match(content,/color: #fff/);
+  assert.match(content,/visibility: visible !important/);
   assert.match(html,/id="checkChessPage"/);
   assert.match(html,/id="reloadChessPage"/);
   assert.match(html,/id="resyncChessPage"/);
@@ -109,12 +109,9 @@ test('analysis time uses a freely editable numeric input, not four fixed choices
 });
 
 test('on-page status is compact, right-aligned and out of the middle of the board',()=>{
-  assert.match(css,/top:\s*12px\s*!important/);
-  assert.match(css,/right:\s*12px\s*!important/);
-  assert.match(css,/font-size:\s*11px\s*!important/);
-  assert.match(css,/max-width:\s*min\(calc\(100vw - 24px\), 260px\)/);
-  assert.doesNotMatch(css,/left:\s*50%\s*!important/);
-  const content=readFileSync(new URL('../extension/content.js',import.meta.url),'utf8');
+  assert.match(content,/top:"12px",right:"12px",left:"auto",transform:"none"/);
+  assert.match(content,/max-width: min\(calc\(100vw - 24px\), 260px\)/);
+  assert.doesNotMatch(content,/left: 50% !important/);
   assert.match(content,/top:"12px",right:"12px",left:"auto",transform:"none"/);
   assert.match(content,/font: 500 11px\/1\.3 system-ui/);
   assert.doesNotMatch(content,/translateX\(-50%\)/);

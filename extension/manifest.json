@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chess Study Coach — Full Stockfish 19",
-  "version": "0.7.9",
+  "version": "0.7.10",
   "description": "Standalone FULL Stockfish 19 NNUE WASM, no Lite fallback, Python or terminal required.",
   "host_permissions": [
     "https://www.chess.com/*",
@@ -19,9 +19,6 @@
       "js": [
         "board.js",
         "content.js"
-      ],
-      "css": [
-        "overlay.css"
       ],
       "run_at": "document_idle"
     }
