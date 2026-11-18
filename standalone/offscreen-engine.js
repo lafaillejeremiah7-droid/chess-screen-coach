@@ -36,8 +36,8 @@ function stopEngine(){
   listeners.clear();
 }
 async function init(){
-  if(worker)return;
   if(starting)return starting;
+  if(worker)return;
   starting=(async()=>{
     try{
       if(typeof WebAssembly!=="object"||typeof Worker!=="function")
