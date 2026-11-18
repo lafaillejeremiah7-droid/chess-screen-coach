@@ -182,6 +182,15 @@ test('Resync button does not silently resume a paused coach',async()=>{
   assert.equal(h.text,undefined);
 });
 
+test('long startup errors do not cover the board while popup retains full diagnostic',async()=>{
+  const detail='Standalone Stockfish unavailable: The offscreen engine script did not start: Could not establish connection. Receiving end does not exist.';
+  const h=harness(message=>message.action==='health'?{ok:false,error:detail}:undefined,'/play/computer',{shadowSupport:true,coachHidden:false});
+  await h.advance(0);
+  assert.equal(h.text,'Engine offline — check extension');
+  assert.equal(h.shadowText,'Engine offline — check extension');
+  assert.equal(h.diagnostic().status,detail);
+});
+
 test('visible content script immediately reports startup instead of remaining blank',async()=>{
   const h=harness();
   assert.match(h.text,/Chess Study Coach active/);
