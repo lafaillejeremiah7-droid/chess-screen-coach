@@ -47,7 +47,7 @@ export function recoverPosition(moves,placement){
     if(!text)throw Error("Empty move in history");
     try{
       if(/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(text)){
-        chess.move({from:text.slice(0,2),to:text.slice(2,4),promotion:text[4]||"q"});
+        chess.move({...{from:text.slice(0,2),to:text.slice(2,4)},...(text[4]?{promotion:text[4]}:{})});
       }else{
         chess.move(text);
       }
@@ -63,7 +63,7 @@ export function formatMove(fen,uci){
     throw Error("Stockfish did not return a legal move");
   let move;
   try{
-    move=chess.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||"q"});
+    move=chess.move({...{from:uci.slice(0,2),to:uci.slice(2,4)},...(uci[4]?{promotion:uci[4]}:{})});
   }catch{throw Error("Stockfish returned an illegal move");}
   const names={p:"pawn",n:"knight",b:"bishop",r:"rook",q:"queen",k:"king"};
   let instruction=`Move ${names[move.piece]} from ${move.from} to ${move.to}`;
