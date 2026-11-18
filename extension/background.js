@@ -165,12 +165,13 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   const fromExtension=sender?.id===chrome.runtime.id &&
     typeof sender?.url==="string" &&
     sender.url.startsWith("chrome-extension://"+chrome.runtime.id+"/");
-  if(!message||!["track","recover","analyze","health","control"].includes(message.action)||
+  if(!message||!["track","advance","recover","analyze","health","control"].includes(message.action)||
      (!fromChess&&!(fromExtension&&["health","control"].includes(message.action))))
     return false;
   const action=message.action;
   let body={};
   if(action==="track")body={previous:message.previous,placement:message.placement};
+  else if(action==="advance")body={previous:message.previous,moves:message.moves,placement:message.placement};
   else if(action==="recover")body={moves:message.moves,placement:message.placement};
   else if(action==="analyze")body={fen:message.fen,seconds:message.seconds,elo:message.elo};
   else if(action==="control"&&typeof message.hidden==="boolean")body={hidden:message.hidden};
@@ -190,6 +191,10 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   }
   const valid=action==="health"||action==="control"||
     (action==="track"?typeof body.previous==="string"&&body.previous.length<=120&&
+       typeof body.placement==="string"&&body.placement.length<=90:
+     action==="advance"?typeof body.previous==="string"&&body.previous.length<=120&&
+       Array.isArray(body.moves)&&body.moves.length>=1&&body.moves.length<=60&&
+       body.moves.every(x=>typeof x==="string"&&x.length<=14)&&
        typeof body.placement==="string"&&body.placement.length<=90:
      action==="recover"?Array.isArray(body.moves)&&body.moves.length<=400&&
        body.moves.every(x=>typeof x==="string"&&x.length<=14)&&
