@@ -189,16 +189,23 @@
   function readClockTurn(doc,board){
     let nodes=[];
     try{
-      nodes=[...doc.querySelectorAll(".clock-component,[data-cy='clock-component'],.clock-bottom,.clock-top")];
+      // Prefer the current board's layout over any other clock/widgets.
+      const layout=board?.closest?.(
+        "#board-layout-main,.board-layout-main,.board-layout-component,[data-cy='board-layout']")||doc;
+      nodes=[...layout.querySelectorAll(
+        ".clock-component,[data-cy='clock-component'],.clock-bottom,.clock-top")];
     }catch{return {turn:null,conflict:false};}
     const active=new Set();
     let ambiguous=false;
     const seen=new Set();
     for(const raw of nodes){
       const clock=raw?.closest?.(".clock-component")||raw;
+      // Some page versions put the active marker on a clock child.
+      if(!activeClock(clock)&&!activeClock(raw))continue;
       if(seen.has(clock))continue;
       seen.add(clock);
-      if(!activeClock(clock))continue;
+      const rect=clock?.getBoundingClientRect?.();
+      if(rect&&(rect.width<2||rect.height<2))continue;
       const c=clockColor(clock,board)||clockColor(raw,board);
       if(c)active.add(c);
       else ambiguous=true;
