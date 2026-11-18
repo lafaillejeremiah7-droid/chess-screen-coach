@@ -1,90 +1,65 @@
-/* Read the current Chess.com board and ask full-strength Stockfish 19. */
-(function(){
+/* Current board only. No move-history tracking, settings, or bundled engine. */
+(() => {
   "use strict";
-  if(globalThis.__fullStockfish19Started)return;
-  globalThis.__fullStockfish19Started=true;
-  const reader=globalThis.ChessCoachBoard;
-  if(!reader)return;
-  let host=null,label=null,board=null,observer=null,timer=null;
-  let lastFen=null,revision=0;
-  function show(message){
-    if(!document.body)return;
-    if(!host||!host.isConnected){
-      host=document.createElement("div");
-      host.id="full-stockfish-19";
-      host.style.cssText="position:fixed!important;top:12px!important;right:12px!important;"+
-        "z-index:2147483647!important;pointer-events:none!important;";
-      const shadow=host.attachShadow?.({mode:"open"});
-      if(shadow){
-        const style=document.createElement("style");
-        style.textContent="div{display:block;box-sizing:border-box;max-width:260px;"+
-          "padding:5px 8px;background:#182633;color:#fff;border-radius:6px;"+
-          "font:500 11px/1.3 system-ui,sans-serif;overflow-wrap:anywhere;}";
-        label=document.createElement("div");
-        shadow.appendChild(style);shadow.appendChild(label);
-      }else{
-        label=host;
-        host.style.cssText+="max-width:260px;padding:5px 8px;background:#182633;"+
-          "color:#fff;font:500 11px/1.3 system-ui,sans-serif;";
-      }
-      document.body.appendChild(host);
+  if (globalThis.__stockfishTerminalRunning) return;
+  globalThis.__stockfishTerminalRunning = true;
+  const board = globalThis.ChessCoachBoard;
+  const overlay = document.createElement("div");
+  overlay.id = "stockfish-terminal-move";
+  Object.assign(overlay.style, {
+    position: "fixed", top: "12px", right: "12px", zIndex: "2147483647",
+    background: "#182633", color: "#fff", font: "500 11px system-ui",
+    padding: "5px 8px", borderRadius: "6px", maxWidth: "260px",
+    pointerEvents: "none", whiteSpace: "normal"
+  });
+  (document.body || document.documentElement).appendChild(overlay);
+  let current = "", attempt = 0, epoch = 0, message = "";
+  function show(value) {
+    if (message !== value) {
+      message = value;
+      overlay.textContent = value;
     }
-    if(label.textContent!==message)label.textContent=message;
   }
-  function schedule(delay=150){
-    clearTimeout(timer);
-    timer=setTimeout(inspect,delay);
-  }
-  function invalidate(message){
-    lastFen=null;
-    revision++;
-    show(message);
-  }
-  function inspect(){
-    let snapshot;
-    try{snapshot=reader.snapshot(document);}
-    catch{invalidate("Board updating");return;}
-    if(!snapshot){invalidate("Waiting for chessboard");return;}
-    if(snapshot.board!==board){
-      observer?.disconnect();
-      board=snapshot.board;
-      observer=new MutationObserver(()=>schedule());
-      observer.observe(board,{
-        childList:true,subtree:true,attributes:true,
-        attributeFilter:["class","style","data-piece","data-square","data-fen",
-          "data-turn","data-side-to-move","data-active-color","data-castling-rights",
-          "data-en-passant","data-ep-square"]
-      });
-    }
+  function scan() {
+    if (document.hidden) return;
     let fen;
-    try{fen=reader.currentFen(snapshot).fen;}
-    catch{invalidate("Waiting for verified turn");return;}
-    if(fen===lastFen)return;
-    lastFen=fen;
-    const request=++revision;
-    show("Stockfish 19 analyzing...");
-    try{
-      chrome.runtime.sendMessage({action:"analyze",fen},response=>{
-        if(request!==revision)return;
-        let now;
-        try{now=reader.currentFen(reader.snapshot(document)).fen;}
-        catch{schedule(0);return;}
-        if(now!==fen){schedule(0);return;}
-        if(chrome.runtime.lastError||!response?.ok){
-          show("Stockfish unavailable — retrying");
-          lastFen=null;
-          schedule(2000);
+    try {
+      const snapshot = board.snapshot(document);
+      if (!snapshot) throw Error("Waiting for chessboard");
+      fen = board.currentFen(snapshot).fen;
+    } catch (error) {
+      current = "";
+      attempt = 0;
+      epoch++;
+      show(String(error?.message || error));
+      return;
+    }
+    if (fen !== current) {
+      current = fen;
+      attempt = 0;
+      epoch++;
+      show("Analyzing current board…");
+    }
+    if (Date.now() - attempt < 3000 || attempt === Infinity) return;
+    attempt = Date.now();
+    const requested = current;
+    const token = epoch;
+    try {
+      chrome.runtime.sendMessage({type: "analyze", fen: requested}, response => {
+        if (token !== epoch || current !== requested) return;
+        const problem = chrome.runtime.lastError;
+        if (problem || !response?.ok) {
+          show("Start terminal: bash start.sh");
           return;
         }
-        show(response.instruction);
+        attempt = Infinity;
+        show(response.instruction || "No legal move");
       });
-    }catch{
-      show("Reload the extension and chess tab");
-      lastFen=null;
-      schedule(2000);
+    } catch {
+      show("Reload the extension and Chess.com tab");
     }
   }
-  // One recovery scan per second; unchanged positions never restart Stockfish.
-  setInterval(()=>schedule(0),1000);
-  schedule(0);
+  scan();
+  setInterval(scan, 500);
+  document.addEventListener("visibilitychange", scan);
 })();

@@ -1,45 +1,28 @@
-# Full Stockfish 19 — Minimal Chrome Extension
+# Stockfish 19 — Terminal
 
-A single-purpose Chrome extension: read the current visible Chess.com board,
-run the **full Stockfish 19 NNUE WASM engine**, and show one move in the top-right corner.
+Native **full-strength Stockfish 19** is the only chess engine. No Elo cap, training engine, browser WASM engine, dashboard, saved move history, or game-mode gating.
 
-No Python server, dashboard, training mode, popup, settings, Elo cap, or
-game-mode filtering. Stockfish searches for **one second per changed position**
-at full engine strength. It analyzes the side to move, regardless of player color.
-It never reconstructs positions from move history.
+## Chromebook setup
 
-## Install on Chromebook
+1. Enable Linux development environment on your Chromebook.
+2. Open **Terminal** and clone this repository, or open your existing checkout:
+   ```bash
+   git clone https://github.com/lafaillejeremiah7-droid/chess-screen-coach.git
+   cd chess-screen-coach
+   bash start.sh
+   ```
+3. In Chrome open `chrome://extensions`, enable Developer mode, select **Load unpacked**, and select the repository's **extension** folder.
+4. Open Chess.com in Chrome. A small box at the top right shows the current board's suggested move.
 
-1. Open **Actions** in this GitHub repository and select **Full Stockfish 19 extension**.
-2. Download the latest successful artifact named **full-stockfish-19-v0.8.0**.
-3. Extract the ZIP. Open Chrome Extensions at chrome://extensions, enable
-   Developer mode, then select **Load unpacked** and choose the extracted folder
-   containing manifest.json.
-4. Refresh the Chess.com tab. A small top-right status shows the move.
+For later updates, run `git pull` in the checkout, then press **Reload** on the extension in `chrome://extensions` and refresh the Chess.com tab. Leave the Terminal running while using the extension.
 
-Chrome's **Reload** button reloads local extension files, not GitHub changes.
-To update, replace the extracted files and reload the extension and Chess.com tab.
+## Run again
 
-## How it works
+```bash
+cd ~/chess-screen-coach
+bash start.sh
+```
 
-- extension/board.js: reads the current DOM pieces, turn and FEN metadata.
-- extension/content.js: watches the board and displays the move.
-- extension/background.js: starts an offscreen engine host.
-- standalone/engine-host.mjs: runs the pinned Full Stockfish 19 WASM worker.
-- standalone/build.mjs: verifies engine SHA-256 and packages the extension.
+Stockfish is installed as `.stockfish/bin/stockfish` by the checksum-verified installer. The local server listens **only** at `127.0.0.1:8765`; stop it with Ctrl+C. Its default analysis budget is one second per position and it never sets UCI Elo or Skill Level limits.
 
-The board reader will wait rather than guess if the side to move cannot be
-verified. If Chess.com does not expose castling or en-passant rights, those
-rights cannot be reconstructed from pieces alone; some special moves may be
-missing from analysis. This is a data limitation, not an Elo or game-mode cap.
-
-## Build locally
-
-Requires Node.js 22+.
-
-    npm install --prefix standalone
-    npm run build --prefix standalone
-    npm test --prefix standalone
-
-Load dist/extension/ as an unpacked extension. The packaged WASM and its
-GPL license are included in the GitHub Actions artifact.
+The board reader needs a visible position **and evidence of whose turn it is** (such as an active clock). Piece placement alone cannot reveal the side to move, castling rights, or en-passant rights. If the page does not expose special-move rights, the reader assumes none; that may affect a suggestion. The extension cannot repair information the page does not provide.

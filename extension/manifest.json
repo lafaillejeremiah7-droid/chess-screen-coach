@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Full Stockfish 19 — Live Board",
+  "name": "Stockfish 19 — Terminal",
   "version": "0.8.0",
-  "description": "Minimal standalone Full Stockfish 19 with live Chess.com board reading.",
+  "description": "Full-strength native Stockfish 19 with a minimal live-board display.",
   "host_permissions": [
     "https://www.chess.com/*",
-    "https://chess.com/*"
+    "https://chess.com/*",
+    "http://127.0.0.1:8765/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -22,12 +23,5 @@
       ],
       "run_at": "document_idle"
     }
-  ],
-  "permissions": [
-    "offscreen"
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  },
-  "minimum_chrome_version": "116"
+  ]
 }
