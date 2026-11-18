@@ -7,10 +7,13 @@ const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',impo
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
 test('extension is injected on Chess.com including human-game URLs',()=>{
-  assert.equal(manifest.version,'0.6.10');
+  assert.equal(manifest.version,'0.7.0');
   assert.ok(manifest.permissions.includes('storage'));
   assert.ok(manifest.permissions.includes('scripting'));
   assert.ok(manifest.permissions.includes('tabs'));
+  assert.ok(manifest.permissions.includes('offscreen'));
+  assert.match(manifest.content_security_policy.extension_pages,/wasm-unsafe-eval/);
+  assert.equal(manifest.host_permissions.some(x=>x.includes('localhost')||x.includes('127.0.0.1')),false);
   assert.equal(manifest.action?.default_popup,'popup.html');
   assert.ok(manifest.host_permissions.includes('https://www.chess.com/*'));
   assert.ok(manifest.host_permissions.includes('https://chess.com/*'));
@@ -21,13 +24,17 @@ test('extension is injected on Chess.com including human-game URLs',()=>{
   assert.ok(manifest.content_scripts[0].js.includes('board.js'));
 });
 
-test('Stockfish bridge authorizes Chess.com game URLs but no other hosts',async()=>{
+test('standalone WASM bridge authorizes Chess.com game URLs but no other hosts',async()=>{
   let listener;
   const responses=[];
   const sandbox={
     URL,AbortController,setTimeout,clearTimeout,
     fetch:async()=>({ok:true,json:async()=>({stockfish:true,python:true})}),
-    chrome:{runtime:{onMessage:{addListener(fn){listener=fn;}}}}
+    chrome:{
+      offscreen:{hasDocument:async()=>true},
+      runtime:{id:'extension-id',sendMessage:async()=>({ok:true,stockfish:true,standalone:true}),
+        onMessage:{addListener(fn){listener=fn;}}}
+    }
   };
   vm.runInNewContext(background,sandbox);
   assert.equal(typeof listener,'function');
@@ -47,7 +54,7 @@ test('Stockfish bridge authorizes Chess.com game URLs but no other hosts',async(
   }
   await new Promise(resolve=>setTimeout(resolve,0));
   assert.equal(responses.length,3);
-  assert.ok(responses.every(r=>r.ok&&r.stockfish));
+  assert.ok(responses.every(r=>r.ok&&r.stockfish&&r.standalone));
 });
 
 test('engine requests only allow bounded analysis time',()=>{
