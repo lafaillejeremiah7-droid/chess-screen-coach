@@ -263,3 +263,14 @@ test('clock inside board bounds without an explicit top/bottom label is not used
   topClock.getBoundingClientRect=()=>({top:240,bottom:280,width:130,height:40});
   assert.equal(h.reader.snapshot(h.doc).turn,null);
 });
+
+test('auto player orientation follows visible piece geometry rather than assuming White',()=>{
+  const w=geometricGame(false);
+  const b=geometricGame(true);
+  assert.equal(w.h.reader.snapshot(w.h.doc).bottomColor,'w');
+  assert.equal(b.h.reader.snapshot(b.h.doc).bottomColor,'b');
+});
+test('unknown board orientation stays unknown rather than guessing White',()=>{
+  const h=harness(initial,{'data-turn':'w'});
+  assert.equal(h.reader.snapshot(h.doc).bottomColor,null);
+});
