@@ -56,6 +56,10 @@ test("offscreen worker UCI and legal move formatting work without Python",async(
   const request=(action,body)=>new Promise(resolve=>{
     assert.equal(callbacks[0]({target:"standalone-engine",action,body},null,resolve),true);
   });
+  const ping=await request("ping");
+  assert.equal(ping.ok,true);
+  assert.equal(ping.ready,true);
+  assert.equal(commands.length,0,"Ping must not load the 99 MB WebAssembly engine");
   const health=await request("health");
   assert.equal(health.ok,true);
   assert.equal(health.stockfish,true);
