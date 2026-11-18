@@ -1,4 +1,4 @@
-import {parseBoard,trackPosition,recoverPosition,formatMove} from "./chess-core.mjs";
+import {parseBoard,trackPosition,recoverPosition,advancePosition,formatMove} from "./chess-core.mjs";
 
 // Runs inside a persistent MV3 offscreen document, not a service worker.
 // Stockfish's Web Worker and its matching WASM are packaged with the extension.
@@ -101,6 +101,7 @@ async function dispatch(action,body={}){
   // Visibility is managed by the extension service worker, which has
   // chrome.storage access. Chrome offscreen documents only have runtime.
   if(action==="track")return trackPosition(body.previous,body.placement);
+  if(action==="advance")return advancePosition(body.previous,body.moves,body.placement);
   if(action==="recover")return recoverPosition(body.moves,body.placement);
   if(action==="analyze")return analyze(body);
   throw Error("Unknown engine request");
