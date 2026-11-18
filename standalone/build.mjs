@@ -12,8 +12,8 @@ const engineDir=join(destination,"engine");
 const stockfish=join(base,"node_modules","stockfish");
 const assets=[
   // Full NNUE, single-threaded so it works without cross-origin isolation.
-  ["stockfish-19-single.js",null],
-  ["stockfish-19-single.wasm",null]
+  ["stockfish-19-single.js","8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d"],
+  ["stockfish-19-single.wasm","991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740"]
 ];
 const stockfishVersion=JSON.parse(await readFile(join(stockfish,"package.json"),"utf8")).version;
 if(stockfishVersion!=="19.0.1")throw Error("Unexpected Stockfish.js version: "+stockfishVersion);
@@ -31,7 +31,7 @@ for(const [filename,expected] of assets){
   const bytes=await readFile(input);
   const actual=createHash("sha256").update(bytes).digest("hex");
   console.log("FULL_STOCKFISH_DIGEST",filename,actual,bytes.length);
-  if(expected&&actual!==expected)throw Error(filename+" digest mismatch; do not distribute this build");
+  if(actual!==expected)throw Error(filename+" digest mismatch; do not distribute this build");
   // A lite neural network is only ~1 MB. Never silently package Lite.
   if(filename.endsWith(".wasm")&&bytes.length<30000000)
     throw Error("Full Stockfish neural network is missing; refusing a Lite-sized WASM");
