@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync,statSync,existsSync} from "node:fs";
 import {resolve,join} from "node:path";
+import {fileURLToPath} from "node:url";
 import vm from "node:vm";
 
-const dist=resolve("dist/extension");
+const dist=resolve(fileURLToPath(new URL("../../dist/extension/",import.meta.url)));
 const read=path=>readFileSync(join(dist,path),"utf8");
 
 test("minimal build contains Full Stockfish 19, not Lite, with no extra UI",()=>{
