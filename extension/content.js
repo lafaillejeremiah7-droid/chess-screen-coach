@@ -107,10 +107,14 @@
   function show(message){
     if(!active())return;
     const element=document.getElementById("chess-study-no-share-overlay")||makeOverlay();
-    // Keep status on the host for diagnostics even when Shadow DOM is used.
-    if(element.textContent!==message)element.textContent=message;
+    // A long engine exception must never cover the board. Keep complete
+    // diagnostics available to the popup while displaying only a short label.
+    element.__coachDiagnostic=message;
+    const compact=message.length>85&&/unavailable|failed|error|connection/i.test(message)
+      ?"Engine offline — check extension":message;
+    if(element.textContent!==compact)element.textContent=compact;
     const label=element.shadowRoot?.getElementById?.("chess-study-no-share-overlay-text");
-    if(label&&label.textContent!==message)label.textContent=message;
+    if(label&&label.textContent!==compact)label.textContent=compact;
   }
 
   function reset(){
@@ -432,7 +436,8 @@
     catch(error){boardError=String(error?.message||error);}
     sendResponse({
       injected:true,hidden:coachHidden,visible:active(),boardFound,boardError,
-      status:document.getElementById("chess-study-no-share-overlay")?.textContent||"",
+      status:document.getElementById("chess-study-no-share-overlay")?.__coachDiagnostic||
+        document.getElementById("chess-study-no-share-overlay")?.textContent||"",
       path:location.pathname
     });
     return false;

@@ -112,3 +112,6 @@ chrome.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
     .catch(error=>sendResponse({ok:false,status:400,error:String(error?.message||error)}));
   return true;
 });
+
+// The bootstrap listener confirms the entire bundled script initialized.
+globalThis.__chessEngineBoot?.ready?.();

@@ -12,6 +12,7 @@ const read=name=>readFileSync(join(dist,name),"utf8");
 test("build contains local engine JS, WASM, license and offscreen document",()=>{
   for(const name of ["manifest.json","offscreen.html","engine-host.js",
     "engine/stockfish-19-single.js","engine/stockfish-19-single.wasm",
+    "offscreen-bootstrap.js",
     "engine/COPYING-GPL-3.0.txt"]){
     assert.ok(statSync(join(dist,name)).size>0,name);
   }
@@ -19,7 +20,11 @@ test("build contains local engine JS, WASM, license and offscreen document",()=>
     "A Lite-sized WASM file must never ship in the Full-only build");
   assert.throws(()=>statSync(join(dist,"engine/stockfish-19-lite-single.wasm")));
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.version,"0.7.5");
+  assert.equal(manifest.version,"0.7.6");
+  const html=read("offscreen.html");
+  assert.ok(html.indexOf("offscreen-bootstrap.js")>=0);
+  assert.ok(html.indexOf("offscreen-bootstrap.js")<html.indexOf("engine-host.js"),
+    "Bootstrap must register the ping receiver before the bundled host");
   assert.ok(manifest.permissions.includes("offscreen"));
   assert.match(manifest.content_security_policy.extension_pages,/wasm-unsafe-eval/);
   assert.equal(manifest.host_permissions.some(x=>/127\.0\.0\.1|localhost/.test(x)),false);
