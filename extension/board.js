@@ -130,6 +130,102 @@
     }
     return null;
   }
+
+  // Chess.com has used different clock layouts. Only an explicitly active
+  // clock with a verifiable color is evidence of whose turn it is.
+  function clockClasses(node){
+    const text=typeof node?.className==="string"?node.className:
+      String(node?.getAttribute?.("class")||"");
+    return " "+text.toLowerCase()+" ";
+  }
+  const hasClass=(node,name)=>
+    !!node?.classList?.contains?.(name)||
+    clockClasses(node).split(/\s+/).includes(name);
+  function explicitClockColor(node){
+    for(const attr of ["data-color","data-player-color","data-side","data-clock-color"]){
+      const c=color(node?.getAttribute?.(attr));
+      if(c)return c;
+    }
+    for(const cls of ["clock-white","white-clock","clock-black","black-clock"]){
+      if(hasClass(node,cls))return cls.includes("white")?"w":"b";
+    }
+    return null;
+  }
+  function declaredBottomColor(board){
+    const explicit=color(board?.getAttribute?.("data-orientation")||
+      board?.getAttribute?.("orientation"));
+    if(explicit)return explicit;
+    if(board?.classList?.contains?.("flipped")||
+       board?.classList?.contains?.("orientation-black")||
+       board?.classList?.contains?.("board-flipped"))return "b";
+    // No declaration: orientation() displays a default but may be wrong.
+    return null;
+  }
+  function clockColor(clock,board){
+    const direct=explicitClockColor(clock);
+    if(direct)return direct;
+    const parent=clock?.closest?.(".clock-white,.clock-black");
+    const parentColor=explicitClockColor(parent);
+    if(parentColor)return parentColor;
+    const bottom=declaredBottomColor(board);
+    if(!bottom)return null;
+    if(hasClass(clock,"clock-bottom"))return bottom;
+    if(hasClass(clock,"clock-top"))return bottom==="w"?"b":"w";
+    const layout=clock?.closest?.(".clock-top,.clock-bottom");
+    if(hasClass(layout,"clock-bottom"))return bottom;
+    if(hasClass(layout,"clock-top"))return bottom==="w"?"b":"w";
+    return null;
+  }
+  function activeClock(clock){
+    for(const name of ["clock-player-turn","player-turn","clock-running",
+      "clock-active","active-clock"]){
+      if(hasClass(clock,name))return true;
+    }
+    for(const attr of ["data-active","data-running","data-is-active"]){
+      if(clock?.getAttribute?.(attr)==="true")return true;
+    }
+    return clock?.getAttribute?.("data-state")==="running";
+  }
+  function readClockTurn(doc,board){
+    let nodes=[];
+    try{
+      nodes=[...doc.querySelectorAll(".clock-component,[data-cy='clock-component'],.clock-bottom,.clock-top")];
+    }catch{return {turn:null,conflict:false};}
+    const active=new Set();
+    let ambiguous=false;
+    const seen=new Set();
+    for(const raw of nodes){
+      const clock=raw?.closest?.(".clock-component")||raw;
+      if(seen.has(clock))continue;
+      seen.add(clock);
+      if(!activeClock(clock))continue;
+      const c=clockColor(clock,board)||clockColor(raw,board);
+      if(c)active.add(c);
+      else ambiguous=true;
+    }
+    if(active.size>1)return {turn:null,conflict:true};
+    if(active.size===1&&!ambiguous)return {turn:[...active][0],conflict:false};
+    return {turn:null,conflict:false};
+  }
+  function indicatorTurn(doc){
+    let nodes=[];
+    try{nodes=[...doc.querySelectorAll(
+      "[data-cy='turn-indicator'],[data-testid='turn-indicator']")];}
+    catch{return {turn:null,conflict:false};}
+    const detected=new Set();
+    for(const node of nodes){
+      const declared=color(node?.getAttribute?.("data-color")||
+        node?.getAttribute?.("data-turn"));
+      const label=String(node?.getAttribute?.("aria-label")||
+        node?.textContent||"").trim().toLowerCase();
+      const matched=label.match(/^(white|black)\s+(?:to move|to play|turn)\b/);
+      const c=declared||(matched?.[1]==="white"?"w":
+        matched?.[1]==="black"?"b":null);
+      if(c)detected.add(c);
+    }
+    return {turn:detected.size===1?[...detected][0]:null,
+      conflict:detected.size>1};
+  }
   function ruleMetadata(board){
     const raw=board.getAttribute?.("data-castling-rights");
     const castling=typeof raw==="string"&&/^(?:-|K?Q?k?q?)$/.test(raw)&&raw.length>0
@@ -150,20 +246,31 @@
     const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?
       parts.join(" "):null;
     const rules=ruleMetadata(board);
+    const clues=[
+      {turn:fen?parts[1]:null,source:"fen"},
+      {turn:currentTurn(board),source:"board"},
+      {...readClockTurn(doc,board),source:"clock"},
+      {...indicatorTurn(doc),source:"indicator"}
+    ];
+    const verified=new Set(clues.filter(c=>c.turn).map(c=>c.turn));
+    const turnConflict=verified.size>1||clues.some(c=>c.conflict);
+    const primary=clues.find(c=>c.turn);
     return {board,placement,bottomColor,myColor:bottomColor,
       playerColor:declaredPlayerColor(board),fen,
-      turn:fen?parts[1]:currentTurn(board),
+      turn:turnConflict?null:primary?.turn||null,
+      turnSource:turnConflict?"conflict":primary?.source||"none",
+      turnConflict,
       castling:rules.castling,enPassant:rules.enPassant};
   }
-  function currentFen(snapshot,assumedTurn){
+  function currentFen(snapshot){
+    if(snapshot.turnConflict)throw Error("Turn indicators disagree; waiting for synchronization.");
+    if(!snapshot.turn)throw Error("Turn unknown — waiting for active clock or turn indicator.");
     if(snapshot.fen)return {fen:snapshot.fen,turnVerified:true,rulesVerified:true};
-    const turn=snapshot.turn||color(assumedTurn);
-    if(!turn)throw Error("Current side to move is unknown. Select a color in extension settings.");
     const castling=snapshot.castling||"-";
     const enPassant=snapshot.enPassant||"-";
     // Unknown special-move rights must not be invented from piece locations.
-    return {fen:snapshot.placement+" "+turn+" "+castling+" "+enPassant+" 0 1",
-      turnVerified:!!snapshot.turn,
+    return {fen:snapshot.placement+" "+snapshot.turn+" "+castling+" "+enPassant+" 0 1",
+      turnVerified:true,turnSource:snapshot.turnSource||"unknown",
       rulesVerified:snapshot.castling!==null&&snapshot.enPassant!==null};
   }
 
