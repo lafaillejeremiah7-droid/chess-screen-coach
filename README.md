@@ -1,3 +1,26 @@
+# Standalone Chrome extension — v0.7.0
+
+**No Linux Terminal, Python server, screen sharing, or localhost connection is required for the standalone Chrome extension.** It bundles **Stockfish 19 Lite (single-threaded WASM)**, a legal-move tracker (chess.js), and an offscreen engine worker. The engine runs locally inside Chrome. Lite is weaker than full desktop Stockfish 19; the separate Python dashboard is still available for those who want it.
+
+## Install the standalone extension on Chromebook
+
+1. Open the [Standalone Chrome extension build](https://github.com/lafaillejeremiah7-droid/chess-screen-coach/actions/workflows/standalone-extension.yml) workflow.
+2. Open the newest **successful** workflow run for main. Download the artifact named `chess-screen-coach-standalone-v0.7.0` (sign in to GitHub if prompted).
+3. Extract the downloaded ZIP using Chromebook Files. Open the extracted folder and confirm it contains `manifest.json`, `engine-host.js`, and the `engine` folder.
+4. Open `chrome://extensions`, enable Developer mode, remove the old Chess Study Coach, click **Load unpacked**, and select the extracted folder containing `manifest.json`.
+5. Confirm **version 0.7.0** and allow Chess.com site access. Open a bot game and click the extension icon → **Refresh status** or **Repair display**. In Extension options → **Check connection**, the result should say **Standalone Stockfish is ready**.
+6. From then on, Chrome runs the extension when Chess.com is open. **Do not start server.py or leave a terminal open.**
+
+**Important:** GitHub's green **Code → Download ZIP** is the *source code*, not the built standalone extension. It does not contain the compiled `engine-host.js` or the bundled Stockfish JS/WASM. Install the GitHub Actions artifact, not the source ZIP.
+
+The engine package is GPL-3.0; its license is included in the built `engine/COPYING-GPL-3.0.txt`. Engine files are verified against the upstream Stockfish.js 19.0.1 release digests during build. All code executes locally, with no remote JavaScript execution.
+
+---
+
+## Legacy Python dashboard and earlier versions
+
+The instructions below describe older versions or the optional Python dashboard, **not the standalone v0.7.0 extension**.
+
 > **v0.6.10 display reliability:** The Chrome toolbar icon now opens a separate **Chess Screen Coach** popup containing the latest on-page instruction or a precise failure state. **Repair display** checks and (when Chrome grants site access) injects missing board/content scripts on the active Chess.com tab. The extension also checks page injection on tab loading and activation. A Shadow DOM status banner isolates the suggestion from Chess.com's CSS. In Extension options, **Repair page script** offers another repair path. This requires installing/reloading the **0.6.10 extension folder**, not merely updating Python in Linux Terminal. The user must grant Chrome extension Site access to Chess.com; the code cannot bypass denied browser permissions. Verify with a bot/practice board.\n\n> **v0.6.9 visible extension troubleshooting:** When Chess Study Coach starts on Chess.com, it displays a high-contrast status line immediately. It then reports whether board recognition, Python health, or move analysis is failing. In **chrome://extensions → Chess Study Coach → Details → Extension options**, click **Check Chess.com page**. This checks whether the actual webpage script was injected, unlike **Check connection**, which only verifies the local Python server. Click **Reload Chess.com tab** to reinitialize a tab after updating the unpacked extension. Chrome must grant Chess Study Coach access to Chess.com. A successful server health check alone cannot confirm webpage injection. No screen-share flow is required for this extension.
 
 > **v0.6.8 suggestion recovery:** On startup, the Chess.com extension now synchronizes its persisted visible/hidden state with the local Python server. This fixes a session left paused by the previous H-key state. In Chrome extension **Details → Extension options**, use **Check connection** to verify Python/Stockfish or **Resume suggestions** to unpause the extension and local server. The small top-of-page instruction is more legible. To install this update on a Chromebook, update the actual unpacked `extension` folder and reload both the extension and the Chess.com tab; updating only the Linux server does not update an extension loaded from Downloads.
