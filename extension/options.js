@@ -88,3 +88,53 @@ $("resumeSuggestions").addEventListener("click",()=>{
     }
   });
 });
+
+const chessTabPatterns=["https://www.chess.com/*","https://chess.com/*"];
+function findChessTab(callback){
+  chrome.tabs.query({url:chessTabPatterns},tabs=>{
+    const error=chrome.runtime.lastError;
+    if(error){
+      $("pageStatus").textContent="Chrome could not inspect Chess.com tabs: "+error.message;
+      return;
+    }
+    const ordered=(tabs||[]).slice().sort((a,b)=>
+      Number(b.active)-Number(a.active)||(b.lastAccessed||0)-(a.lastAccessed||0));
+    if(!ordered.length){
+      $("pageStatus").textContent="No accessible Chess.com tab. Open Chess.com and allow Chess Study Coach site access in chrome://extensions → Details.";
+      return;
+    }
+    callback(ordered[0]);
+  });
+}
+
+$("checkChessPage").addEventListener("click",()=>{
+  $("pageStatus").textContent="Checking whether the extension loaded in Chess.com…";
+  findChessTab(tab=>{
+    chrome.tabs.sendMessage(tab.id,{action:"coachStatus"},response=>{
+      if(chrome.runtime.lastError||!response?.injected){
+        $("pageStatus").textContent="Chrome did not inject the coach into this Chess.com tab. Allow its site access, then click Reload Chess.com tab.";
+        return;
+      }
+      if(response.hidden||!response.visible){
+        $("pageStatus").textContent="The page script is loaded but paused. Click Resume suggestions.";
+      }else if(response.boardError){
+        $("pageStatus").textContent="The page script is loaded, but board detection failed: "+response.boardError;
+      }else if(!response.boardFound){
+        $("pageStatus").textContent="The page script is loaded, but no supported chessboard is detected. Open a game and check again.";
+      }else{
+        $("pageStatus").textContent="Extension loaded; board found. On-page status: "+(response.status||"No text currently shown");
+      }
+    });
+  });
+});
+
+$("reloadChessPage").addEventListener("click",()=>{
+  $("pageStatus").textContent="Reloading a Chess.com tab…";
+  findChessTab(tab=>{
+    chrome.tabs.reload(tab.id,()=>{
+      $("pageStatus").textContent=chrome.runtime.lastError?
+        "Chrome could not reload that tab: "+chrome.runtime.lastError.message:
+        "Chess.com tab reloaded. Return to it, then click Check Chess.com page.";
+    });
+  });
+});
