@@ -14,7 +14,7 @@
   const INITIAL=reader.initial+" w KQkq - 0 1";
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
-  let lastSide=null,lastHistory="",rejectionText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
+  let lastSide=null,lastSnapshotKey=null,settledText=null,healthChecked=false,analysisPending=false;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
@@ -121,8 +121,8 @@
     generation++;
     observer?.disconnect();observer=null;
     currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
-    healthChecked=false;analysisPending=false;rejectedPosition=null;retryAt=0;
-    lastSide=null;lastHistory="";settledText=null;badSnapshots=0;lockedPlayerColor=null;
+    healthChecked=false;analysisPending=false;retryAt=0;
+    lastSide=null;lastSnapshotKey=null;settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
 
@@ -136,7 +136,7 @@
     observer?.disconnect();
     // Observe only this board, not clocks, chat, ads, or our overlay.
     observer=new MutationObserver(()=>schedule());
-    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","fen","data-orientation","data-player-color","data-user-color","data-player-side"]});
+    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","fen","data-orientation","data-player-color","data-user-color","data-player-side","data-turn","data-side-to-move","data-active-color","data-color-to-move","data-to-move","data-castling-rights","data-en-passant","data-ep-square"]});
   }
 
   function retry(message){
@@ -160,18 +160,17 @@
     });
   }
 
-  function historyKey(snapshot){
-    return (snapshot.moves||[]).join(" ");
+  function snapshotKey(snapshot,side){
+    return JSON.stringify([snapshot.placement,snapshot.fen||null,
+      snapshot.turn||null,snapshot.castling||null,snapshot.enPassant||null,side]);
   }
-
   function unchanged(epoch,snapshot){
     if(!current(epoch))return false;
     let latest=null;
     try{latest=reader.snapshot(document);}catch{}
-    return latest&&latest.board===snapshot.board&&latest.placement===snapshot.placement&&
-      latest.bottomColor===snapshot.bottomColor&&latest.playerColor===snapshot.playerColor&&
-      latest.myColor===snapshot.myColor&&latest.fen===snapshot.fen&&
-      historyKey(latest)===historyKey(snapshot)&&location.pathname===lastPath;
+    return !!latest&&latest.board===snapshot.board&&
+      snapshotKey(latest,playerColor(latest))===
+      snapshotKey(snapshot,playerColor(snapshot))&&location.pathname===lastPath;
   }
 
   async function tick(){
@@ -203,90 +202,74 @@
         // Retain the FEN and verify the next placement by legal-move tracking.
         currentBoard=snapshot.board;
         lastColor=snapshot.myColor;
-        analysisPending=true;rejectedPosition=null;settledText=null;
+        analysisPending=true;settledText=null;
         watchBoard(currentBoard);
       }
       if(snapshot.myColor!==lastColor){
         // Flipping a board changes its orientation, not the game's position.
         lastColor=snapshot.myColor;
-        analysisPending=true;rejectedPosition=null;settledText=null;
+        analysisPending=true;settledText=null;
       }
-      const placement=snapshot.placement;
-      const history=historyKey(snapshot);
+      // The current DOM snapshot, not prior moves, defines the position.
       const side=playerColor(snapshot);
-      if(placement===lastPlacement && side===lastSide && history===lastHistory &&
-         !analysisPending && (!snapshot.fen || snapshot.fen===currentFen)){
+      const boardKey=snapshotKey(snapshot,side);
+      if(boardKey===lastSnapshotKey&&!analysisPending){
         if(settledText)show(settledText);
         return;
       }
-      const positionKey=JSON.stringify([currentFen,placement,snapshot.fen,history]);
-      if(positionKey===rejectedPosition){show(rejectionText);return;}
-      if(!currentFen && placement!==reader.initial && !snapshot.fen && !history){
-        show("Start from the initial position, or provide a complete move history or FEN.");
+      show("Reading current board…");
+      // Never reuse a prior FEN when the visible pieces changed.
+      let position;
+      try{
+        position=reader.currentFen(snapshot,side);
+      }catch(error){
+        settledText=null;analysisPending=true;
+        show("Current position unavailable: "+String(error?.message||error));
+        schedule(1000);
         return;
       }
-      show("Checking position…");
+      if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       if(!healthChecked){
         const health=await request("health");
-        if(!current(epoch))return;
+        if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
         if(!health.ok){retry(health.error||"Bundled Stockfish unavailable");return;}
         if(!health.stockfish){retry("Bundled Stockfish unavailable. Install the standalone extension ZIP.");return;}
         healthChecked=true;
       }
-
-      let nextFen=snapshot.fen;
-      let resetToStart=false;
-      if(!nextFen){
-        let result;
-        if(history && (!currentFen || history!==lastHistory || placement===reader.initial)){
-          result=await request("recover",{moves:snapshot.moves,placement});
-          if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-        }
-        // The move list may lag the pieces during animation. Try a legal
-        // transition from the previous verified position if replay disagrees.
-        if(currentFen && placement!==lastPlacement && (!result || result.status===400)){
-          result=await request("track",{previous:currentFen,placement});
-          if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-          if(result.status===400 && history && history===lastHistory && placement!==reader.initial){
-            result=await request("recover",{moves:snapshot.moves,placement});
-            if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-          }
-        }
-        if(result && !result.ok && result.status!==400){
-          retry(result.error||"Bundled Stockfish unavailable");
-          return;
-        }
-        if(result?.ok)nextFen=result.fen;
-        else if(placement===reader.initial && !history &&
-                (!currentFen || (placement!==lastPlacement && result?.status===400))){
-          nextFen=INITIAL;
-          resetToStart=true;
-        }else if(result){
-          rejectedPosition=positionKey;
-          rejectionText=currentFen?"Position tracking lost. Open a complete move list or resync with FEN.":
-            "Move history cannot reconstruct this position. Resync using FEN.";
-          show(rejectionText);
-          return;
-        }else nextFen=currentFen;
-      }
-      if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(resetToStart)lockedPlayerColor=null;
-      const verifiedSide=playerColor(snapshot);
-      currentFen=nextFen;lastPlacement=placement;rejectedPosition=null;
-      lastSide=verifiedSide;lastHistory=history;
-      if(!verifiedSide){
+      currentFen=position.fen;
+      lastPlacement=snapshot.placement;
+      lastSide=side;
+      lastSnapshotKey=boardKey;
+      if(!side){
         analysisPending=false;
-        show("Select your color in Chess Screen Coach settings.");
+        settledText="Select your color in Chess Screen Coach settings.";
+        show(settledText);
         return;
       }
-      analysisPending=currentFen.split(" ")[1]===verifiedSide;
-      if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
-      show("Analyzing…");
-      const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.fullStrength?"full":settings.strengthElo});
+      // A page-supplied turn/FEN is authoritative. Without one the extension
+      // can only analyze a conditional position, never assert it is your turn.
+      if(position.turnVerified&&currentFen.split(" ")[1]!==side){
+        analysisPending=false;
+        settledText="Waiting for opponent";
+        show(settledText);
+        return;
+      }
+      show("Analyzing current board…");
+      analysisPending=true;
+      const answer=await request("analyze",{fen:currentFen,
+        seconds:settings.thinkSeconds,
+        elo:settings.fullStrength?"full":settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(!answer.ok){retry(answer.error||"Bundled Stockfish unavailable");return;}
+      if(!answer.ok){
+        lastSnapshotKey=null; // Recheck the same current board after errors.
+        retry(answer.error||"Bundled Stockfish unavailable");
+        return;
+      }
       analysisPending=false;retryAt=0;
-      settledText=displayInstruction(answer);show(settledText);
+      const note=!position.turnVerified?"Turn unverified: ":
+        !position.rulesVerified?"Rule rights unverified: ":"";
+      settledText=note+displayInstruction(answer);
+      show(settledText);
     }catch(error){
       if(current(epoch))retry("Chess Study Coach error: "+String(error?.message||error));
     }finally{
@@ -316,7 +299,7 @@
       // Low-frequency safety scan recovers from missed DOM mutations and new boards.
       // It makes no engine request when the chess position is unchanged.
       schedule(0);
-    },4000);
+    },1000);
     schedule(0);
   }
 
@@ -414,15 +397,7 @@
         sendResponse({ok:false,error:"No readable chessboard found. Open a game board before resyncing."});
         return false;
       }
-      // Never discard a usable tracked position when a midgame board has no
-      // verified FEN or complete history to reconstruct the side to move.
-      const recoverable=snapshot.placement===reader.initial||
-        Boolean(snapshot.fen)||(Array.isArray(snapshot.moves)&&snapshot.moves.length>0);
-      if(!recoverable){
-        sendResponse({ok:false,error:"Cannot resync this midgame board: no FEN or move history is available. Open the full game move list."});
-        return false;
-      }
-      reset(); // Invalidates in-flight analysis, cached move and retry cooldown.
+      reset(); // A fresh DOM snapshot is sufficient, including midgame boards.
       resume(); // Reconnects the board observer and requests a new legal position.
       show("Resyncing board…");
       // Settings can be open in another tab; Chrome will resume its board

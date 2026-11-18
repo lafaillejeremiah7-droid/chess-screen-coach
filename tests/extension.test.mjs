@@ -122,14 +122,19 @@ test("unspecified player color stays unknown rather than equaling orientation",(
   assert.equal(result.bottomColor,"b");
 });
 
-test('extracts complete SAN history for recovery after several unseen moves',()=>{
-  const history=['e4','e5','Nf3','Nc6','Bb5','a6'];
-  const nodes=history.map((move,i)=>({
-    textContent:move,
-    getAttribute(name){return name==='data-ply'?String(i+1):null;}
-  }));
-  const doc={querySelectorAll(selector){return selector==='[data-ply]'?nodes:[];}};
-  assert.deepEqual(globalThis.ChessCoachBoard.readMoveHistory(doc),history);
+test('snapshot reads only the current board and never requests move history',()=>{
+  const pieces=classesFromFen(initial).map(cls=>fakePiece(cls));
+  const board=fakeBoard(480,pieces,{'data-turn':'w'});
+  const doc={querySelectorAll(selector){
+    if(selector==='[data-ply]'||selector.includes('move'))
+      throw Error('Move history must not be consulted');
+    return [board];
+  }};
+  const result=snapshot(doc);
+  assert.equal(result.placement,initial);
+  assert.equal(result.turn,'w');
+  assert.equal(result.moves,undefined);
+  assert.equal(globalThis.ChessCoachBoard.readMoveHistory,undefined);
 });
 
 test('a matching FEN with extra whitespace keeps a usable turn field',()=>{
