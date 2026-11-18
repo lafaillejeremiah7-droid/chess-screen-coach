@@ -93,7 +93,9 @@ async function confirmEngineHost(){
         target:"standalone-engine",action:"ping"
       });
       if(result?.ok===true&&result?.ready===true)return;
-      last=Error("Offscreen script did not acknowledge the connection");
+      if(result?.fatal===true)
+        throw Error("Engine host JavaScript failed to load: "+(result.error||"unknown error"));
+      last=Error(result?.error||"Offscreen script did not acknowledge the connection");
     }catch(error){last=error;}
     if(attempt<19)await pause(200);
   }
