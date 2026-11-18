@@ -110,7 +110,7 @@ class AnalysisWorkloadTests(unittest.TestCase):
                 board.push_uci(move)
                 server.analyze_fen(board.fen())
             self.assertEqual(len(server.ANALYSIS_CACHE), 2)
-            self.assertNotIn((initial_fen, 1.0, 1400), server.ANALYSIS_CACHE)
+            self.assertNotIn((initial_fen, 1.0, "full"), server.ANALYSIS_CACHE)
             self.assertEqual(self.engine.analysis.call_count, 3)
 
     def test_main_coach_recommends_weaker_selected_move_not_top_pv(self):
@@ -172,7 +172,7 @@ class AdjustableAnalysisTests(unittest.TestCase):
         answer = server.analyze_fen(fen)
         self.assertEqual(answer["seconds"], 1.0)
         self.assertEqual(self.engine.analysis.call_args.args[1].time, 1.0)
-        self.assertIn((fen, 1.0, 1400), server.ANALYSIS_CACHE)
+        self.assertIn((fen, 1.0, "full"), server.ANALYSIS_CACHE)
 
     def test_search_budget_is_explicit_and_engine_reports_diagnostics(self):
         result=server.analyze_fen(chess.Board().fen(), 1)
@@ -190,8 +190,8 @@ class AdjustableAnalysisTests(unittest.TestCase):
         server.analyze_fen(fen,1)
         server.analyze_fen(fen,0.2)
         self.assertEqual(self.engine.analysis.call_count,2)
-        self.assertIn((fen,0.2,1400),server.ANALYSIS_CACHE)
-        self.assertIn((fen,1.0,1400),server.ANALYSIS_CACHE)
+        self.assertIn((fen,0.2,"full"),server.ANALYSIS_CACHE)
+        self.assertIn((fen,1.0,"full"),server.ANALYSIS_CACHE)
 
     def test_main_strength_changes_config_and_separates_cache(self):
         fen=chess.Board().fen()
@@ -400,14 +400,12 @@ class SparringTests(unittest.TestCase):
 
 
 class MainCoachStrengthTests(unittest.TestCase):
-    def test_main_engine_strength_default_is_permanent_1400(self):
-        self.assertEqual(server.MAIN_COACH_ELO, 1400)
+    def test_main_engine_starts_at_full_strength(self):
+        self.assertEqual(server.main_strength(), "full")
         fake=Mock()
         server.configure_main_engine(fake)
-        fake.configure.assert_called_once_with({
-            "Threads": 1, "Hash": 16,
-            "UCI_LimitStrength": True, "UCI_Elo": 1400
-        })
+        self.assertEqual([call.args[0] for call in fake.configure.call_args_list],
+                         [{"Threads": 1, "Hash": 16}, {"UCI_LimitStrength": False}])
 
 
 class LocalApiBoundaryTests(unittest.TestCase):

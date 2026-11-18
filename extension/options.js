@@ -1,5 +1,5 @@
 "use strict";
-const defaults={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:false,showDetails:false};
+const defaults={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,showDetails:false};
 const allowed=[0.2,0.5,1,2];
 const $=id=>document.getElementById(id);
 chrome.storage.local.get(defaults,values=>{
@@ -7,7 +7,7 @@ chrome.storage.local.get(defaults,values=>{
   $("thinkSeconds").value=String(allowed.includes(values.thinkSeconds)?values.thinkSeconds:1);
   $("showDetails").checked=values.showDetails===true;
   $("strengthElo").value=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?String(values.strengthElo):"1400";
-  $("fullStrength").checked=values.fullStrength===true;
+  $("fullStrength").checked=values.fullStrength!==false;
   updateStrengthDisplay();
 });
 function updateStrengthDisplay(){

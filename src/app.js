@@ -21,7 +21,7 @@ const status = message => { $('status').textContent=message; };
 const strengthControl=$('strengthElo'),fullStrengthControl=$('fullStrength');
 const savedElo=Number(localStorage.getItem('chessCoachMainElo'));
 strengthControl.value=Number.isInteger(savedElo)&&savedElo>=1320&&savedElo<=3190?savedElo:1400;
-fullStrengthControl.checked=localStorage.getItem('chessCoachMainFull')==='true';
+fullStrengthControl.checked=localStorage.getItem('chessCoachMainFull')!=='false';
 function selectedStrength(){return fullStrengthControl.checked?'full':Number(strengthControl.value);}
 function refreshStrength(){
   $('strengthValue').textContent=strengthControl.value;

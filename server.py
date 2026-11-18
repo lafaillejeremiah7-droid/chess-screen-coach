@@ -27,7 +27,7 @@ COACH_HIDDEN = False
 ACTIVE_ANALYSIS = None  # python-chess SimpleAnalysisResult, stopped on H.
 ANALYSIS_SECONDS = 1.0
 # Default main-coach strength. Stockfish UCI Elo is approximate, not an online rating.
-MAIN_COACH_ELO = 1400
+DEFAULT_MAIN_STRENGTH = "full"
 MIN_COACH_ELO, MAX_COACH_ELO = 1320, 3190
 ALLOWED_ANALYSIS_SECONDS = (0.2, 0.5, 1.0, 2.0)
 ANALYSIS_CACHE: OrderedDict[str, dict] = OrderedDict()
@@ -108,9 +108,9 @@ def search_seconds(value: float | None) -> float:
 
 
 def main_strength(value=None):
-    """Validate an optional main-agent strength, keeping the 1400 default."""
+    """Validate an optional main-agent strength, defaulting to full strength."""
     if value is None:
-        return MAIN_COACH_ELO
+        return DEFAULT_MAIN_STRENGTH
     if value == "full" and type(value) is str:
         return "full"
     if type(value) is not int or not MIN_COACH_ELO <= value <= MAX_COACH_ELO:
@@ -127,9 +127,9 @@ def configure_engine_strength(engine, elo) -> None:
 
 
 def configure_main_engine(engine) -> None:
-    """Initialize the main agent at the unchanged 1400-UCI-Elo default."""
-    engine.configure({"Threads": 1, "Hash": 16,
-                      "UCI_LimitStrength": True, "UCI_Elo": MAIN_COACH_ELO})
+    """Initialize the main agent at full strength."""
+    engine.configure({"Threads": 1, "Hash": 16})
+    configure_engine_strength(engine, DEFAULT_MAIN_STRENGTH)
 
 
 def coach_control(hidden: bool | None = None) -> dict:
@@ -375,7 +375,7 @@ class Handler(BaseHTTPRequestHandler):
             elif endpoint == "/api/training/evaluate":
                 from training import evaluate_attempt
                 result = evaluate_attempt(data.get("fen"), data.get("move"), engine_info,
-                                          ENGINE_LOCK, ENGINE, main_elo=MAIN_COACH_ELO)
+                                          ENGINE_LOCK, ENGINE, main_elo=DEFAULT_MAIN_STRENGTH)
             elif endpoint == "/api/sparring/turn":
                 from sparring import play_practice_turn
                 result = play_practice_turn(data.get("fen"), data.get("move"), data.get("elo"),
@@ -405,8 +405,8 @@ class Handler(BaseHTTPRequestHandler):
                                            "stockfish19": ENGINE is not None and is_stockfish19_name(ENGINE.id.get("name")),
                                            "engine": ENGINE.id.get("name") if ENGINE is not None else None,
                                            "default_seconds": ANALYSIS_SECONDS,
-                                           "default_elo": MAIN_COACH_ELO,
-                                           "strength_limited": ENGINE is not None,
+                                           "default_elo": DEFAULT_MAIN_STRENGTH,
+                                           "strength_limited": DEFAULT_MAIN_STRENGTH != "full",
                                            "times": ALLOWED_ANALYSIS_SECONDS})
         if path == "/":
             path = "/index.html"
@@ -448,7 +448,7 @@ def main() -> None:
             )
         configure_main_engine(ENGINE)
         print(f"Stockfish 19 ready: {engine_path}; 1 thread, 16 MiB hash; "
-              f"main coach targets {MAIN_COACH_ELO} UCI Elo; default 1-second search.")
+              f"main coach uses {DEFAULT_MAIN_STRENGTH} strength; default 1-second search.")
     except Exception as exc:
         if ENGINE is not None:
             ENGINE.close()

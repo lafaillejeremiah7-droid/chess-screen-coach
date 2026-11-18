@@ -11,7 +11,7 @@
   <main class="layout">
     <header>
       <h1>Python Chess Screen Coach</h1>
-      <p>Main coach: Stockfish 19 · 1400 approximate UCI Elo by default · 1-second searches.</p>
+      <p>Main coach: Stockfish 19 · full strength by default · 1-second searches.</p>
       <p><a style="color:#9cc8ed" href="/training.html">Adaptive 100-position training</a> · <a style="color:#9cc8ed" href="/sparring.html">Play an adjustable-strength Stockfish opponent</a></p>
       <p>Press H to hide/show the coach and its floating move display.</p>
     </header>
@@ -39,7 +39,7 @@
       <label>Main agent strength: <output id="strengthValue">1400</output> UCI Elo
         <input id="strengthElo" type="range" min="1320" max="3190" step="10" value="1400">
       </label>
-      <label class="check"><input id="fullStrength" type="checkbox"> Full Stockfish 19 strength</label>
+      <label class="check"><input id="fullStrength" type="checkbox" checked> Full Stockfish 19 strength</label>
     </div>
     <div class="preview">
       <canvas id="screen" width="960" height="540" aria-label="Drag a square around the chessboard"></canvas>

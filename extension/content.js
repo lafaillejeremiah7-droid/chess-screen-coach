@@ -10,13 +10,13 @@
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
-  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:false,showDetails:false,coachHidden:false};
+  const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,showDetails:false,coachHidden:false};
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
     settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
     settings.strengthElo=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1400;
-    settings.fullStrength=values.fullStrength===true;
+    settings.fullStrength=values.fullStrength!==false;
     settings.showDetails=values.showDetails===true;
     settings.coachHidden=values.coachHidden===true;
     setCoachHidden(settings.coachHidden);

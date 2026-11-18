@@ -86,7 +86,7 @@ test('default engine request uses one second',async()=>{
   await h.advance(0);
   const first=h.requests.find(message=>message.action==='analyze');
   assert.equal(first.seconds,1);
-  assert.equal(first.elo,1400);
+  assert.equal(first.elo,"full");
 });
 test('saved main-agent strength is sent with analysis',async()=>{
   const limited=harness(undefined,'/analysis',{playerSide:'w',thinkSeconds:1,strengthElo:2300,fullStrength:false});

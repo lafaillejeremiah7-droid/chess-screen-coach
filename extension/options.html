@@ -32,8 +32,8 @@
     <small>One Stockfish thread and 16 MiB hash. Longer searches may find better moves but use more CPU.</small>
     <label for="strengthElo">Main agent strength: <output id="strengthValue">1400</output> UCI Elo</label>
     <input type="range" id="strengthElo" min="1320" max="3190" step="10" value="1400">
-    <label><input type="checkbox" id="fullStrength">Full Stockfish 19 strength (no Elo limit)</label>
-    <small>Default: 1400 UCI Elo. This changes the main agent, not the separate sparring opponent.</small>
+    <label><input type="checkbox" id="fullStrength" checked>Full Stockfish 19 strength (no Elo limit)</label>
+    <small>Full strength is the default. Clear the checkbox to use the Elo slider. This changes the main agent, not the separate sparring opponent.</small>
     <label><input type="checkbox" id="showDetails">Show search depth, evaluation, and factual move details</label>
     <small>Extra details are displayed on personal analysis and computer/practice pages.</small>
     <button type="submit">Save settings</button>
