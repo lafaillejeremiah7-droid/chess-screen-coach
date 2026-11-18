@@ -16,6 +16,7 @@
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
   let lastSide=null,lastHistory="",rejectionText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
+  let rejectionRetryAt=0,rejectionAttempts=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
   const settings={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,showDetails:false,coachHidden:false};
@@ -122,6 +123,7 @@
     observer?.disconnect();observer=null;
     currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
     healthChecked=false;analysisPending=false;rejectedPosition=null;retryAt=0;
+    rejectionRetryAt=0;rejectionAttempts=0;
     lastSide=null;lastHistory="";settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
@@ -220,7 +222,15 @@
         return;
       }
       const positionKey=JSON.stringify([currentFen,placement,snapshot.fen,history]);
-      if(positionKey===rejectedPosition){show(rejectionText);return;}
+      if(positionKey===rejectedPosition&&Date.now()<rejectionRetryAt){
+        show(rejectionText);
+        schedule(Math.max(100,rejectionRetryAt-Date.now()));
+        return;
+      }
+      // DOM updates can temporarily disagree with the board. Never freeze
+      // a rejected position forever; retry after a bounded backoff.
+      if(positionKey!==rejectedPosition)rejectionAttempts=0;
+      rejectedPosition=null;
       if(!currentFen && placement!==reader.initial && !snapshot.fen && !history){
         show("Start from the initial position, or provide a complete move history or FEN.");
         return;
@@ -238,8 +248,21 @@
       let resetToStart=false;
       if(!nextFen){
         let result;
-        if(history && (!currentFen || history!==lastHistory || placement===reader.initial)){
-          result=await request("recover",{moves:snapshot.moves,placement});
+        const moves=snapshot.moves||[];
+        const prior=lastHistory?lastHistory.split(" "):[];
+        // When the on-screen move list extends a known history, replay only
+        // the additional moves from our last verified FEN. This also handles
+        // 4+ rapid moves, beyond the bounded board-only search.
+        if(currentFen&&prior.length&&moves.length>prior.length&&
+           prior.every((move,index)=>moves[index]===move)&&moves.length-prior.length<=60){
+          result=await request("advance",{
+            previous:currentFen,moves:moves.slice(prior.length),placement
+          });
+          if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+        }
+        if((!result||result.status===400)&&history&&
+           (!currentFen||history!==lastHistory||placement===reader.initial)){
+          result=await request("recover",{moves,placement});
           if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
         }
         // The move list may lag the pieces during animation. Try a legal
@@ -263,9 +286,12 @@
           resetToStart=true;
         }else if(result){
           rejectedPosition=positionKey;
-          rejectionText=currentFen?"Position tracking lost. Open a complete move list or resync with FEN.":
-            "Move history cannot reconstruct this position. Resync using FEN.";
+          rejectionText=currentFen?"Position tracking temporarily uncertain; retrying…":
+            "Move history cannot reconstruct this position. Waiting for a valid FEN or complete history.";
+          rejectionAttempts=Math.min(rejectionAttempts+1,4);
+          rejectionRetryAt=Date.now()+Math.min(1200*2**(rejectionAttempts-1),9600);
           show(rejectionText);
+          schedule(rejectionRetryAt-Date.now());
           return;
         }else nextFen=currentFen;
       }
@@ -273,6 +299,7 @@
       if(resetToStart)lockedPlayerColor=null;
       const verifiedSide=playerColor(snapshot);
       currentFen=nextFen;lastPlacement=placement;rejectedPosition=null;
+      rejectionRetryAt=0;rejectionAttempts=0;
       lastSide=verifiedSide;lastHistory=history;
       if(!verifiedSide){
         analysisPending=false;
@@ -316,7 +343,7 @@
       // Low-frequency safety scan recovers from missed DOM mutations and new boards.
       // It makes no engine request when the chess position is unchanged.
       schedule(0);
-    },4000);
+    },1000);
     schedule(0);
   }
 
