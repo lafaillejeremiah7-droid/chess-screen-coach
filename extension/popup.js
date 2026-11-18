@@ -64,8 +64,6 @@ $("resync").addEventListener("click",async()=>{
 $("resume").addEventListener("click",async()=>{
   try{
     await chrome.storage.local.set({coachHidden:false});
-    const response=await chrome.runtime.sendMessage({action:"control",hidden:false});
-    if(!response?.ok)throw Error(response?.error||"Standalone engine did not accept the resume request.");
     await status();
   }catch(error){report("Resume failed",String(error?.message||error));}
 });
