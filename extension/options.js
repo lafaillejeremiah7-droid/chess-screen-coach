@@ -138,3 +138,20 @@ $("reloadChessPage").addEventListener("click",()=>{
     });
   });
 });
+
+$("repairChessPage").addEventListener("click",()=>{
+  $("pageStatus").textContent="Checking Chrome's permission to repair the Chess.com tab…";
+  findChessTab(tab=>{
+    chrome.runtime.sendMessage({action:"repairTab",tabId:tab.id},response=>{
+      if(chrome.runtime.lastError||!response?.ok){
+        $("pageStatus").textContent="Repair failed: "+
+          (response?.error||chrome.runtime.lastError?.message||"No response")+
+          ". Check Chrome's Site access and reload the tab.";
+        return;
+      }
+      $("pageStatus").textContent="Page script running. "+
+        (response.boardFound?"Board detected. ":"No chessboard detected. ")+
+        (response.status||"Return to Chess.com to see the status banner.");
+    });
+  });
+});

@@ -19,7 +19,11 @@ function optionsHarness({tabs=[{id:42,active:false,lastAccessed:123}],reply={
     return elements.get(id);
   };
   const chrome={
-    runtime:{lastError:null},
+    runtime:{lastError:null,
+      sendMessage(message,callback){
+        actions.push({action:'repair',message});
+        callback({ok:true,injected:true,boardFound:true,status:'Move pawn from e2 to e4'});
+      }},
     storage:{local:{
       get(defaults,callback){callback(defaults);},
       set(_values,callback){callback?.();}
@@ -62,6 +66,15 @@ test('reload control reloads the identified Chess.com tab on a direct click',()=
   ui.click('reloadChessPage');
   assert.equal(ui.actions[1].action,'reload');
   assert.equal(ui.actions[1].tabId,42);
+});
+
+test('options page repairs the selected Chess.com tab through verified background action',()=>{
+  const ui=optionsHarness();
+  ui.click('repairChessPage');
+  assert.equal(ui.actions[1].action,'repair');
+  assert.equal(ui.actions[1].message.action,'repairTab');
+  assert.equal(ui.actions[1].message.tabId,42);
+  assert.match(ui.element('pageStatus').textContent,/Page script running/);
 });
 
 test('visible overlay has a definite contrasting foreground and background',()=>{

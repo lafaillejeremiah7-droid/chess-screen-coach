@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chess Study Coach — No Screen Share",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "description": "Board-aware local Stockfish analysis with adjustable search time and diagnostics.",
   "host_permissions": [
     "https://www.chess.com/*",
@@ -29,7 +29,13 @@
     }
   ],
   "permissions": [
-    "storage"
+    "storage",
+    "scripting",
+    "tabs"
   ],
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Chess Screen Coach — view suggestion and repair",
+    "default_popup": "popup.html"
+  }
 }

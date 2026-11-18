@@ -11,7 +11,6 @@
   }
   // Ignore a second injection into the same extension execution context.
   if(globalThis.__ChessCoachContentActive)return;
-  globalThis.__ChessCoachContentActive=true;
   const INITIAL=reader.initial+" w KQkq - 0 1";
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
@@ -63,17 +62,56 @@
   const active=()=>eligible()&&!document.hidden&&!coachHidden;
   const current=epoch=>active()&&epoch===generation;
 
+  function makeOverlay(){
+    const host=document.createElement("div");
+    host.id="chess-study-no-share-overlay";
+    host.setAttribute("role","status");
+    host.setAttribute("aria-live","polite");
+    // Inline important declarations beat competing Chess.com and extension CSS.
+    const hostStyle={
+      position:"fixed",top:"64px",left:"50%",transform:"translateX(-50%)",
+      display:"block",visibility:"visible",opacity:"1",zIndex:"2147483647",
+      pointerEvents:"none",width:"max-content",maxWidth:"calc(100vw - 24px)"
+    };
+    for(const [name,value] of Object.entries(hostStyle))
+      host.style?.setProperty?.(name.replace(/[A-Z]/g,c=>"-"+c.toLowerCase()),value,"important");
+    // The shadow tree isolates the actual suggestion text from Chess.com's
+    // global typography, color and visibility rules. Without Shadow DOM
+    // the existing overlay.css remains the fallback.
+    if(typeof host.attachShadow==="function"){
+      const root=host.attachShadow({mode:"open"});
+      const css=document.createElement("style");
+      css.textContent=`
+        :host { all: initial; position: fixed !important; top: 64px !important;
+          left: 50% !important; transform: translateX(-50%) !important;
+          display: block !important; visibility: visible !important;
+          opacity: 1 !important; z-index: 2147483647 !important;
+          pointer-events: none !important; max-width: calc(100vw - 24px) !important; }
+        #chess-study-no-share-overlay-text {
+          all: initial; box-sizing: border-box; display: block;
+          max-width: min(calc(100vw - 24px), 480px);
+          padding: 8px 12px; background: #182633; color: #fff;
+          border: 1px solid #d1d5db; border-radius: 7px;
+          box-shadow: 0 3px 12px rgba(0,0,0,.55);
+          font: 600 14px/1.4 system-ui,-apple-system,sans-serif;
+          white-space: normal; overflow-wrap: anywhere; text-align: center;
+        }`;
+      const label=document.createElement("div");
+      label.id="chess-study-no-share-overlay-text";
+      root.appendChild(css);
+      root.appendChild(label);
+    }
+    document.body.appendChild(host);
+    return host;
+  }
+
   function show(message){
     if(!active())return;
-    let element=document.getElementById("chess-study-no-share-overlay");
-    if(!element){
-      element=document.createElement("div");
-      element.id="chess-study-no-share-overlay";
-      element.setAttribute("role","status");
-      element.setAttribute("aria-live","polite");
-      document.body.appendChild(element);
-    }
+    const element=document.getElementById("chess-study-no-share-overlay")||makeOverlay();
+    // Keep status on the host for diagnostics even when Shadow DOM is used.
     if(element.textContent!==message)element.textContent=message;
+    const label=element.shadowRoot?.getElementById?.("chess-study-no-share-overlay-text");
+    if(label&&label.textContent!==message)label.textContent=message;
   }
 
   function reset(){
@@ -369,6 +407,10 @@
     });
     return false;
   });
+  // Display a startup status even if the Chrome storage callback is delayed.
+  // Set the idempotency guard only after all listeners have been registered.
+  show("Chess Study Coach initializing…");
+  globalThis.__ChessCoachContentActive=true;
   // Read the saved hidden state before starting the observer or engine requests.
   if(chrome.storage?.local?.get)
     chrome.storage.local.get(settings,values=>{
