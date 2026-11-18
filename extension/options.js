@@ -128,7 +128,9 @@ $("resyncChessPage").addEventListener("click",()=>{
         $("pageStatus").textContent="Resync unavailable: "+
           (response?.error||"No response from the Chess.com page.");
       }else{
-        $("pageStatus").textContent="Resync started. Return to the Chess.com tab to see the updated position.";
+        $("pageStatus").textContent=response.queued
+          ?"Board resync queued. Return to Chess.com to finish."
+          :"Resync started. Return to the Chess.com tab to see the updated position.";
       }
     });
   });
