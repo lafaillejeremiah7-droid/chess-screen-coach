@@ -52,10 +52,8 @@ $("repair").addEventListener("click",async()=>{
 $("resume").addEventListener("click",async()=>{
   try{
     await chrome.storage.local.set({coachHidden:false});
-    const response=await fetch("http://127.0.0.1:8765/api/control",{
-      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hidden:false})
-    });
-    if(!response.ok)throw Error("Local Python server did not accept the resume request.");
+    const response=await chrome.runtime.sendMessage({action:"control",hidden:false});
+    if(!response?.ok)throw Error(response?.error||"Standalone engine did not accept the resume request.");
     await status();
   }catch(error){report("Resume failed",String(error?.message||error));}
 });

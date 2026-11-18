@@ -21,6 +21,8 @@ function optionsHarness({tabs=[{id:42,active:false,lastAccessed:123}],reply={
   const chrome={
     runtime:{lastError:null,
       sendMessage(message,callback){
+        if(message.action==='health')return Promise.resolve({ok:true,stockfish:true,standalone:true});
+        if(message.action==='control')return Promise.resolve({ok:true,hidden:false});
         actions.push({action:'repair',message});
         callback({ok:true,injected:true,boardFound:true,status:'Move pawn from e2 to e4'});
       }},
