@@ -241,6 +241,17 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(result["fen"],board.fen())
         self.assertEqual(result["recovered_moves"],8)
 
+    def test_replay_rejects_skipped_turns(self):
+        from sparring import play_practice_turn
+        for token in ("--", "0000", "Z0"):
+            with self.subTest(token=token), self.assertRaises(ValueError):
+                server.recover_from_history([token], chess.Board().board_fen())
+        board = chess.Board()
+        board.push(chess.Move.null())
+        board.push(chess.Move.null())
+        with self.assertRaisesRegex(ValueError, "skipped turn"):
+            play_practice_turn(board.fen(), "e2e4", 2000, moves=["0000", "0000"])
+
     def test_rejects_history_that_disagrees_with_board(self):
         with self.assertRaisesRegex(ValueError,"does not match"):
             server.recover_from_history(["e4","e5"],chess.Board().board_fen())

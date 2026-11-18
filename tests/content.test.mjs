@@ -166,7 +166,7 @@ test('a move during analysis is tracked without displaying the stale answer',asy
 });
 
 test('new games on a reused board restart from the initial position',async()=>{
-  const h=harness();await h.advance(0);
+  const h=harness(m=>m.action==='track'&&m.placement===initial?{ok:false,status:400}:undefined);await h.advance(0);
   h.state.placement=e4;h.mutate();await h.advance(200);
   assert.equal(h.text,'Waiting for opponent');
   h.state.placement=initial;h.mutate();await h.advance(200);
@@ -402,4 +402,80 @@ test('visibility changes made by the dashboard propagate to the extension',async
   h.serverState.hidden=false;
   await h.advance(2200);
   assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('redrawing the overlay restores the same instruction without another search',async()=>{
+  const h=harness();await h.advance(0);
+  const move=h.text;
+  h.document.getElementById('chess-study-no-share-overlay').remove();
+  await h.advance(4000);
+  assert.equal(h.text,move);
+  assert.equal(h.requests.filter(m=>m.action==='analyze').length,1);
+});
+
+test('late player metadata overrides orientation and survives a transient missing attribute',async()=>{
+  const h=harness();await h.advance(0);
+  h.state.playerColor='b';h.mutate();await h.advance(200);
+  assert.equal(h.text,'Waiting for opponent');
+  delete h.state.playerColor;h.mutate();await h.advance(200);
+  assert.equal(h.text,'Waiting for opponent');
+});
+
+for(const source of ['fen','moves']){
+  test('new '+source+' unlocks recovery on the same rejected layout',async()=>{
+    const expected=e5+' w KQkq - 0 2';
+    const h=harness(m=>m.action==='recover'?(m.moves.length===1?
+      {ok:false,status:400}:{ok:true,fen:expected}):undefined);
+    h.state.placement=e5;h.state.moves=['e4'];await h.advance(0);
+    assert.match(h.text,/cannot reconstruct/);
+    if(source==='fen')h.state.fen=expected;
+    else h.state.moves.push('e5');
+    h.mutate();await h.advance(200);
+    assert.equal(h.requests.at(-1).fen,expected);
+    assert.match(h.text,/Move pawn/);
+  });
+}
+
+test('a turn-only change invalidates a delayed move before it renders',async()=>{
+  let finish;
+  const h=harness(m=>m.action==='analyze'?new Promise(r=>{finish=r}):undefined);
+  h.state.placement=e5;h.state.fen=e5+' w KQkq - 0 2';await h.advance(0);
+  h.state.fen=e5+' b KQkq - 0 2';
+  finish({ok:true,instruction:'STALE'});await flush();
+  assert.notEqual(h.text,'STALE');
+  await h.advance(250);assert.equal(h.text,'Waiting for opponent');
+});
+
+test('a four-ply knight shuffle keeps the recovered move counters',async()=>{
+  const fen=initial+' w KQkq - 4 3';
+  const h=harness(m=>m.action==='recover'?{ok:true,fen}:undefined);
+  await h.advance(0);
+  h.state.moves=['Nf3','Nf6','Ng1','Ng8'];h.mutate();await h.advance(200);
+  assert.equal(h.requests.at(-1).fen,fen);
+});
+
+test('a temporary recovery error retries on the same position',async()=>{
+  let attempts=0;
+  const h=harness(m=>m.action==='recover'?(++attempts===1?
+    {ok:false,status:503,error:'Busy'}:{ok:true,fen:e5+' w KQkq - 0 2'}):undefined);
+  h.state.placement=e5;h.state.moves=['e4','e5'];await h.advance(0);
+  assert.equal(h.text,'Busy');await h.advance(10500);
+  assert.equal(attempts,2);assert.match(h.text,/Move pawn/);
+});
+
+test('a control poll started before the H key cannot undo the pause',async()=>{
+  let finish;
+  const h=harness(m=>m.action==='control'&&m.hidden===undefined?new Promise(r=>{finish=r}):undefined);
+  await h.advance(4000);h.key('h');finish({ok:true,hidden:false});
+  await flush();await h.advance(0);assert.equal(h.text,undefined);
+});
+
+test('the previous move disappears while a different position is being verified',async()=>{
+  let finish;
+  const h=harness(m=>m.action==='track'?new Promise(r=>{finish=r}):undefined);
+  await h.advance(0);
+  h.state.placement=e4;h.mutate();await h.advance(200);
+  assert.equal(h.text,'Checking position…');
+  finish({ok:true,fen:e4+' b KQkq - 0 1'});await flush();
+  assert.equal(h.text,'Waiting for opponent');
 });

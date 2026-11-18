@@ -310,9 +310,12 @@ def recover_from_history(moves: list, placement: str) -> dict:
             if not token:
                 raise ValueError("Empty history move")
             try:
-                board.push_san(token)
+                move = board.parse_san(token)
             except ValueError:
-                board.push_uci(token)
+                move = board.parse_uci(token)
+            if not move:
+                raise ValueError("Passing a turn is not a legal chess move")
+            board.push(move)
         target = chess.BaseBoard(placement)
     except (ValueError, AssertionError) as exc:
         raise ValueError("History contains an illegal or malformed move") from exc

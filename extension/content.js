@@ -6,7 +6,7 @@
   const INITIAL=reader.initial+" w KQkq - 0 1";
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
-  let lastText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
+  let lastSide=null,lastHistory="",rejectionText="",settledText=null,healthChecked=false,analysisPending=false,rejectedPosition=null;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
   let lockedPlayerColor=null,coachHidden=false,lastToggleAt=0;
@@ -26,7 +26,10 @@
   }
   function playerColor(snapshot){
     if(settings.playerSide!=="auto")return settings.playerSide;
-    if(snapshot.playerColor==="w"||snapshot.playerColor==="b")return snapshot.playerColor;
+    if(snapshot.playerColor==="w"||snapshot.playerColor==="b"){
+      lockedPlayerColor=snapshot.playerColor;
+      return lockedPlayerColor;
+    }
     // Orientation is only an initial fallback, never re-infer after a flip.
     if(!lockedPlayerColor)lockedPlayerColor=snapshot.bottomColor||snapshot.myColor||null;
     return lockedPlayerColor;
@@ -61,7 +64,7 @@
       element.setAttribute("aria-live","polite");
       document.body.appendChild(element);
     }
-    if(message!==lastText){element.textContent=message;lastText=message;}
+    if(element.textContent!==message)element.textContent=message;
   }
 
   function reset(){
@@ -69,7 +72,7 @@
     observer?.disconnect();observer=null;
     currentFen=null;lastPlacement=null;currentBoard=null;lastColor=null;
     healthChecked=false;analysisPending=false;rejectedPosition=null;retryAt=0;
-    lastText="";settledText=null;badSnapshots=0;lockedPlayerColor=null;
+    lastSide=null;lastHistory="";settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
   }
 
@@ -83,7 +86,7 @@
     observer?.disconnect();
     // Observe only this board, not clocks, chat, ads, or our overlay.
     observer=new MutationObserver(()=>schedule());
-    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","data-orientation"]});
+    observer.observe(board,{childList:true,subtree:true,attributes:true,attributeFilter:["class","style","data-piece","data-square","data-fen","fen","data-orientation","data-player-color","data-user-color","data-player-side"]});
   }
 
   function retry(message){
@@ -107,19 +110,25 @@
     });
   }
 
+  function historyKey(snapshot){
+    return (snapshot.moves||[]).join(" ");
+  }
+
   function unchanged(epoch,snapshot){
     if(!current(epoch))return false;
     let latest=null;
     try{latest=reader.snapshot(document);}catch{}
     return latest&&latest.board===snapshot.board&&latest.placement===snapshot.placement&&
       latest.bottomColor===snapshot.bottomColor&&latest.playerColor===snapshot.playerColor&&
-      latest.myColor===snapshot.myColor;
+      latest.myColor===snapshot.myColor&&latest.fen===snapshot.fen&&
+      historyKey(latest)===historyKey(snapshot)&&location.pathname===lastPath;
   }
 
   async function tick(){
     if(!active())return;
     if(processing){dirty=true;return;}
     processing=true;
+    if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
     const epoch=generation;
     try{
       if(Date.now()<retryAt){schedule(retryAt-Date.now());return;}
@@ -153,15 +162,20 @@
         analysisPending=true;rejectedPosition=null;settledText=null;
       }
       const placement=snapshot.placement;
-      if(placement===lastPlacement&&!analysisPending&&(!snapshot.fen||snapshot.fen===currentFen)){if(settledText)show(settledText);return;}
-      const positionKey=currentFen+"|"+placement;
-      // A rejected board must change before another two-ply search is useful.
-      if(positionKey===rejectedPosition)return;
-      if(!currentFen&&placement!==reader.initial&&!snapshot.fen&&
-         !(Array.isArray(snapshot.moves)&&snapshot.moves.length)){
+      const history=historyKey(snapshot);
+      const side=playerColor(snapshot);
+      if(placement===lastPlacement && side===lastSide && history===lastHistory &&
+         !analysisPending && (!snapshot.fen || snapshot.fen===currentFen)){
+        if(settledText)show(settledText);
+        return;
+      }
+      const positionKey=JSON.stringify([currentFen,placement,snapshot.fen,history]);
+      if(positionKey===rejectedPosition){show(rejectionText);return;}
+      if(!currentFen && placement!==reader.initial && !snapshot.fen && !history){
         show("Start from the initial position, or provide a complete move history or FEN.");
         return;
       }
+      show("Checking position…");
       if(!healthChecked){
         const health=await request("health");
         if(!current(epoch))return;
@@ -170,47 +184,52 @@
         healthChecked=true;
       }
 
-      let nextFen=currentFen;
-      if(snapshot.fen){nextFen=snapshot.fen;}
-      else if(placement===reader.initial){nextFen=INITIAL;}
-      else if(!currentFen&&Array.isArray(snapshot.moves)&&snapshot.moves.length){
-        const recovered=await request("recover",{moves:snapshot.moves,placement});
-        if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-        if(!recovered.ok){
-          rejectedPosition=positionKey;
-          show("Move history cannot reconstruct this position. Resync using FEN.");
+      let nextFen=snapshot.fen;
+      let resetToStart=false;
+      if(!nextFen){
+        let result;
+        if(history && (!currentFen || history!==lastHistory || placement===reader.initial)){
+          result=await request("recover",{moves:snapshot.moves,placement});
+          if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+        }
+        // The move list may lag the pieces during animation. Try a legal
+        // transition from the previous verified position if replay disagrees.
+        if(currentFen && placement!==lastPlacement && (!result || result.status===400)){
+          result=await request("track",{previous:currentFen,placement});
+          if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+          if(result.status===400 && history && history===lastHistory && placement!==reader.initial){
+            result=await request("recover",{moves:snapshot.moves,placement});
+            if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+          }
+        }
+        if(result && !result.ok && result.status!==400){
+          retry(result.error||"Python server unavailable");
           return;
         }
-        nextFen=recovered.fen;
-      }
-      else if(placement!==lastPlacement){
-        const tracked=await request("track",{previous:currentFen,placement});
-        if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-        if(!tracked.ok){
-          if(tracked.status===400){
-            // A complete SAN history can reconstruct more than two unseen plies.
-            // Python validates every move and the final observed placement.
-            const recovered=Array.isArray(snapshot.moves)&&snapshot.moves.length
-              ?await request("recover",{moves:snapshot.moves,placement}):null;
-            if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-            if(recovered?.ok)nextFen=recovered.fen;
-            else{
-              rejectedPosition=positionKey;
-              show("Position tracking lost. Open a complete move list or resync with FEN.");
-              return;
-            }
-          }else{retry(tracked.error||"Python server unavailable");return;}
-        }else nextFen=tracked.fen;
+        if(result?.ok)nextFen=result.fen;
+        else if(placement===reader.initial && !history &&
+                (!currentFen || (placement!==lastPlacement && result?.status===400))){
+          nextFen=INITIAL;
+          resetToStart=true;
+        }else if(result){
+          rejectedPosition=positionKey;
+          rejectionText=currentFen?"Position tracking lost. Open a complete move list or resync with FEN.":
+            "Move history cannot reconstruct this position. Resync using FEN.";
+          show(rejectionText);
+          return;
+        }else nextFen=currentFen;
       }
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
+      if(resetToStart)lockedPlayerColor=null;
+      const verifiedSide=playerColor(snapshot);
       currentFen=nextFen;lastPlacement=placement;rejectedPosition=null;
-      const side=playerColor(snapshot);
-      if(!side){
+      lastSide=verifiedSide;lastHistory=history;
+      if(!verifiedSide){
         analysisPending=false;
         show("Select your color in Chess Screen Coach settings.");
         return;
       }
-      analysisPending=currentFen.split(" ")[1]===side;
+      analysisPending=currentFen.split(" ")[1]===verifiedSide;
       if(!analysisPending){settledText="Waiting for opponent";show(settledText);return;}
       show("Analyzing…");
       const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.fullStrength?"full":settings.strengthElo});
@@ -253,12 +272,13 @@
   function setCoachHidden(hidden){
     if(coachHidden===hidden)return;
     coachHidden=hidden;
+    controlRevision++;
     if(hidden){
       stopWatching(); // Invalidates an in-flight response.
       document.getElementById("chess-study-no-share-overlay")?.remove();
-      lastText="";settledText=null;analysisPending=true;retryAt=0;
+      settledText=null;analysisPending=true;retryAt=0;
     }else{
-      lastText="";settledText=null;analysisPending=true;retryAt=0;
+      settledText=null;analysisPending=true;retryAt=0;
       resume();
     }
   }
@@ -284,17 +304,21 @@
 
   // A dashboard-side H key can also change the shared server control.
   // This lightweight sync does not read the board or request analysis.
-  let controlTimer=null;
+  let controlTimer=null,controlRevision=0,controlPolling=false;
   const syncVisibility=async()=>{
-    if(document.hidden||!eligible()||Date.now()-lastToggleAt<2200)return;
+    if(controlPolling||document.hidden||!eligible()||Date.now()-lastToggleAt<2200)return;
+    controlPolling=true;
+    const revision=controlRevision;
     const control=await request("control");
-    if(document.hidden)return;
+    controlPolling=false;
+    if(document.hidden||revision!==controlRevision)return;
     if(control?.ok&&typeof control.hidden==="boolean"&&control.hidden!==coachHidden){
       setCoachHidden(control.hidden);
       chrome.storage?.local?.set?.({coachHidden:control.hidden});
     }
   };
   const refreshControlWatcher=()=>{
+    controlRevision++;
     clearInterval(controlTimer);controlTimer=null;
     if(!document.hidden)controlTimer=setInterval(()=>{void syncVisibility();},2000);
   };

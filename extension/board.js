@@ -152,7 +152,7 @@
     const bottomColor=orientation(board);
     const candidate=board.getAttribute?.("data-fen")||board.getAttribute?.("fen")||"";
     const parts=candidate.trim().split(/\s+/);
-    const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?candidate.trim():null;
+    const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?parts.join(" "):null;
     return {board,placement,bottomColor,myColor:bottomColor,playerColor:declaredPlayerColor(board),fen,moves:readMoveHistory(doc)};
   }
 
