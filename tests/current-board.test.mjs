@@ -212,3 +212,54 @@ test('clock search is scoped to the current board layout when possible',()=>{
   assert.equal(snapshot.turn,'w');
   assert.equal(snapshot.turnConflict,false);
 });
+
+function geometricGame(blackAtBottom=false){
+  const topClock=fakeClock('clock-component clock-player-turn');
+  topClock.getBoundingClientRect=()=>({top:40,bottom:80,width:130,height:40});
+  const bottomClock=fakeClock('clock-component');
+  bottomClock.getBoundingClientRect=()=>({top:520,bottom:560,width:130,height:40});
+  const h=harness(initial,{clocks:[topClock,bottomClock]});
+  h.board.getBoundingClientRect=()=>({top:100,bottom:500,width:400,height:400});
+  const originalNodes=h.board.querySelectorAll();
+  for(const node of originalNodes){
+    const match=node.getAttribute('class').match(/square-([1-8])([1-8])/);
+    const rank=Number(match[2]);
+    const row=blackAtBottom?rank-1:8-rank;
+    node.getBoundingClientRect=()=>({top:100+row*50,bottom:150+row*50,width:50,height:50});
+  }
+  return {h,topClock,bottomClock};
+}
+test('realistic unlabeled Chess.com active top clock uses the current observed board geometry',()=>{
+  const {h}=geometricGame(false);
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'b');
+  assert.equal(snapshot.turnSource,'clock');
+  assert.equal(snapshot.turnConflict,false);
+});
+test('same unlabeled active top clock maps to White on a visibly flipped board',()=>{
+  const {h}=geometricGame(true);
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'w');
+  assert.equal(snapshot.turnSource,'clock');
+});
+test('an active bottom clock maps to White when White pieces are visibly at the bottom',()=>{
+  const {h,topClock,bottomClock}=geometricGame(false);
+  topClock.className='clock-component';
+  topClock.classList.contains=name=>['clock-component'].includes(name);
+  bottomClock.className='clock-component clock-player-turn';
+  bottomClock.classList.contains=name=>['clock-component','clock-player-turn'].includes(name);
+  assert.equal(h.reader.snapshot(h.doc).turn,'w');
+});
+test('conflicting explicit orientation and physical board layout cannot guess a clock color',()=>{
+  const {h}=geometricGame(true);
+  const original=h.board.getAttribute;
+  h.board.getAttribute=name=>name==='data-orientation'?'white':original(name);
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,null);
+  assert.throws(()=>h.reader.currentFen(snapshot),/Turn unknown/);
+});
+test('clock inside board bounds without an explicit top/bottom label is not used as turn evidence',()=>{
+  const {h,topClock}=geometricGame(false);
+  topClock.getBoundingClientRect=()=>({top:240,bottom:280,width:130,height:40});
+  assert.equal(h.reader.snapshot(h.doc).turn,null);
+});
