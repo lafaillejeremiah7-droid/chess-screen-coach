@@ -1,13 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Chess Study Coach — No Screen Share",
-  "version": "0.6.10",
-  "description": "Board-aware local Stockfish analysis with adjustable search time and diagnostics.",
+  "version": "0.7.0",
+  "description": "Standalone Stockfish 19 Lite WASM chess coach; no Python or terminal required.",
   "host_permissions": [
     "https://www.chess.com/*",
-    "https://chess.com/*",
-    "http://127.0.0.1/*",
-    "http://localhost/*"
+    "https://chess.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -31,7 +29,8 @@
   "permissions": [
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "offscreen"
   ],
   "options_page": "options.html",
   "action": {
