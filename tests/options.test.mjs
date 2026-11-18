@@ -86,3 +86,9 @@ test('visible overlay has a definite contrasting foreground and background',()=>
   assert.match(html,/id="checkChessPage"/);
   assert.match(html,/id="reloadChessPage"/);
 });
+
+test('analysis time uses a freely editable numeric input, not four fixed choices',()=>{
+  assert.match(html,/<input type="number" id="thinkSeconds"[^>]*step="any"/);
+  assert.match(source,/const validTime=seconds=>Number\.isFinite\(seconds\)/);
+  assert.doesNotMatch(source,/\[0\.2,0\.5,1,2\]/);
+});
