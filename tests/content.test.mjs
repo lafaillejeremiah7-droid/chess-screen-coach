@@ -13,7 +13,7 @@ function harness(respond,pathname='/play/computer',options=null){
   let now=0,serial=0,reads=0;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
   const requests=[],controlRequests=[];
-  const serverState={hidden:false};
+  const serverState={hidden:options?.serverHidden===true};
   const state={placement:initial,myColor:'w',board:{isConnected:true}};
   const document={
     hidden:false,
@@ -358,6 +358,16 @@ test('a pending engine reply never reappears after H hides the coach',async()=>{
   await flush();
   assert.equal(h.text,undefined);
   assert.equal(h.timerCount,1); // No board watching or engine polling.
+});
+
+test('startup unpauses a previously hidden Python server when the extension is visible',async()=>{
+  const h=harness(undefined,'/play/computer',{
+    playerSide:'w',thinkSeconds:1,coachHidden:false,serverHidden:true
+  });
+  await h.advance(0);
+  assert.equal(h.serverState.hidden,false);
+  assert.equal(h.controlRequests[0].hidden,false);
+  assert.equal(h.text,'Move pawn from e2 to e4');
 });
 
 test('persisted hidden setting blocks initial board reads and engine requests',async()=>{
