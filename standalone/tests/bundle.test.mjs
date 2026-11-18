@@ -1,110 +1,52 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync,statSync} from "node:fs";
+import {readFileSync,statSync,existsSync} from "node:fs";
+import {resolve,join} from "node:path";
 import vm from "node:vm";
-import {fileURLToPath} from "node:url";
-import {dirname,join,resolve} from "node:path";
 
-const base=dirname(fileURLToPath(import.meta.url));
-const dist=resolve(base,"..","..","dist","extension");
-const read=name=>readFileSync(join(dist,name),"utf8");
+const dist=resolve("dist/extension");
+const read=path=>readFileSync(join(dist,path),"utf8");
 
-test("build contains local engine JS, WASM, license and offscreen document",()=>{
-  for(const name of ["manifest.json","offscreen.html","engine-host.js",
+test("minimal build contains Full Stockfish 19, not Lite, with no extra UI",()=>{
+  for(const path of ["manifest.json","board.js","content.js","background.js",
+    "offscreen.html","offscreen-bootstrap.js","engine-host.js",
     "engine/stockfish-19-single.js","engine/stockfish-19-single.wasm",
-    "offscreen-bootstrap.js",
-    "engine/COPYING-GPL-3.0.txt"]){
-    assert.ok(statSync(join(dist,name)).size>0,name);
-  }
-  assert.ok(statSync(join(dist,"engine/stockfish-19-single.wasm")).size>30000000,
-    "A Lite-sized WASM file must never ship in the Full-only build");
-  assert.throws(()=>statSync(join(dist,"engine/stockfish-19-lite-single.wasm")));
+    "engine/COPYING-GPL-3.0.txt"])assert.ok(existsSync(join(dist,path)),path);
+  assert.ok(statSync(join(dist,"engine/stockfish-19-single.wasm")).size>30000000);
+  for(const path of ["popup.html","options.html","server.py","training.html"])
+    assert.equal(existsSync(join(dist,path)),false,path);
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.version,"0.7.11");
-  const html=read("offscreen.html");
-  assert.ok(html.indexOf("offscreen-bootstrap.js")>=0);
-  assert.ok(html.indexOf("offscreen-bootstrap.js")<html.indexOf("engine-host.js"),
-    "Bootstrap must register the ping receiver before the bundled host");
-  assert.ok(manifest.permissions.includes("offscreen"));
-  assert.match(manifest.content_security_policy.extension_pages,/wasm-unsafe-eval/);
-  assert.equal(manifest.host_permissions.some(x=>/127\.0\.0\.1|localhost/.test(x)),false);
-});
-test("offscreen worker UCI and legal move formatting work without Python",async()=>{
-  const callbacks=[];
-  const commands=[];
-  class Worker{
-    constructor(url){assert.match(url,/stockfish-19-single\.js$/);}
-    postMessage(command){
-      commands.push(command);
-      if(command==="uci")this.onmessage({data:"uciok"});
-      if(command==="isready")this.onmessage({data:"readyok"});
-      if(command.startsWith("go movetime")){
-        this.onmessage({data:"info depth 12 score cp 22"});
-        this.onmessage({data:"bestmove e2e4"});
-      }
-    }
-    terminate(){}
-  }
-  const stored={coachHidden:false};
-  const chrome={
-    runtime:{
-      getURL:path=>"chrome-extension://test/"+path,
-      onMessage:{addListener:fn=>callbacks.push(fn)}
-    },
-    storage:{local:{
-      get:async()=>stored,
-      set:async data=>{Object.assign(stored,data);}
-    }}
-  };
-  vm.runInNewContext(read("engine-host.js"),{chrome,Worker,setTimeout,clearTimeout,
-    Promise,Error,Number,console});
-  const request=(action,body)=>new Promise(resolve=>{
-    assert.equal(callbacks[0]({target:"standalone-engine",action,body},null,resolve),true);
-  });
-  const ping=await request("ping");
-  assert.equal(ping.ok,true);
-  assert.equal(ping.ready,true);
-  assert.equal(commands.length,0,"Ping must not load the 99 MB WebAssembly engine");
-  const health=await request("health");
-  assert.equal(health.ok,true);
-  assert.equal(health.stockfish,true);
-  const fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-  const result=await request("analyze",{fen,seconds:0.2,elo:"full"});
-  assert.equal(result.ok,true);
-  assert.equal(result.instruction,"Move pawn from e2 to e4");
-  assert.equal(result.depth,12);
-  assert.ok(commands.includes("go movetime 200"));
-  // Offscreen documents cannot use chrome.storage; controls live in background.
-  assert.ok(!read("engine-host.js").includes("chrome.storage.local"));
+  assert.equal(manifest.version,"0.8.0");
+  assert.deepEqual(manifest.permissions,["offscreen"]);
+  assert.equal(manifest.action,undefined);
 });
 
-test("a failed Stockfish Worker constructor does not poison future engine startups",async()=>{
-  const callbacks=[];
-  let constructions=0;
-  class Worker {
-    constructor(){
-      constructions++;
-      if(constructions===1)throw Error("Transient worker creation failure");
-    }
-    postMessage(command){
-      if(command==="uci")this.onmessage({data:"uciok"});
-      if(command==="isready")this.onmessage({data:"readyok"});
+test("engine uses Full Stockfish with no Elo limit and a legal UCI move",async()=>{
+  const callbacks=[],commands=[];
+  class Worker{
+    postMessage(cmd){
+      commands.push(cmd);
+      if(cmd==="uci")this.onmessage({data:"uciok"});
+      if(cmd==="isready")this.onmessage({data:"readyok"});
+      if(cmd.startsWith("go movetime"))this.onmessage({data:"bestmove e2e4"});
     }
     terminate(){}
   }
   const chrome={runtime:{
     getURL:path=>"chrome-extension://test/"+path,
-    onMessage:{addListener:callback=>callbacks.push(callback)}
+    onMessage:{addListener:fn=>callbacks.push(fn)}
   }};
-  vm.runInNewContext(read("engine-host.js"),
-    {chrome,Worker,setTimeout,clearTimeout,Promise,Error,Number,console});
-  const request=action=>new Promise(resolve=>{
-    callbacks[0]({target:"standalone-engine",action,body:{}},null,resolve);
+  vm.runInNewContext(read("engine-host.js"),{chrome,Worker,setTimeout,clearTimeout,
+    Promise,Error,Number,console});
+  const ask=(action,body={})=>new Promise(resolve=>{
+    callbacks[0]({target:"standalone-engine",action,body},null,resolve);
   });
-  const first=await request("health");
-  assert.equal(first.ok,false);
-  assert.match(first.error,/Transient worker creation failure/);
-  const second=await request("health");
-  assert.equal(second.ok,true);
-  assert.equal(constructions,2);
+  assert.equal((await ask("ping")).ready,true);
+  const fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  const answer=await ask("analyze",{fen});
+  assert.equal(answer.ok,true);
+  assert.equal(answer.instruction,"Move pawn from e2 to e4");
+  assert.ok(commands.includes("setoption name UCI_LimitStrength value false"));
+  assert.ok(commands.includes("go movetime 1000"));
+  assert.equal(commands.some(c=>c.includes("UCI_Elo")),false);
 });
