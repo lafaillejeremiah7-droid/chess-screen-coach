@@ -32,7 +32,7 @@ jobs:
       - name: Save unpacked standalone extension
         uses: actions/upload-artifact@v4
         with:
-          name: chess-screen-coach-standalone-full-v0.7.1
+          name: chess-screen-coach-standalone-full-v0.7.2
           path: dist/extension/
           if-no-files-found: error
           retention-days: 90
