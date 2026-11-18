@@ -39,6 +39,13 @@
     <button type="submit">Save settings</button>
     <p id="status" role="status"></p>
   </form>
+  <section aria-labelledby="diagnosticsTitle">
+    <h2 id="diagnosticsTitle">Move suggestion diagnostics</h2>
+    <p>If no instruction appears, check the local server and resume the overlay.</p>
+    <button id="checkEngine" type="button">Check connection</button>
+    <button id="resumeSuggestions" type="button">Resume suggestions</button>
+    <p id="connectionStatus" role="status" aria-live="polite"></p>
+  </section>
   <script src="options.js"></script>
 </body>
 </html>

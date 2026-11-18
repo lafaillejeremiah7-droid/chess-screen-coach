@@ -333,20 +333,31 @@
   chrome.storage?.onChanged?.addListener?.((changes,area)=>{
     if(area==="local"){
       const next={...settings};
+      let settingsChanged=false;
       for(const key of Object.keys(settings)){
-        if(changes[key])next[key]=changes[key].newValue;
+        if(changes[key]){
+          next[key]=changes[key].newValue;
+          settingsChanged=true;
+        }
       }
-      applySettings(next);
+      if(settingsChanged)applySettings(next);
     }
   });
   // Read the saved hidden state before starting the observer or engine requests.
   if(chrome.storage?.local?.get)
     chrome.storage.local.get(settings,values=>{
       applySettings(values);
-      if(coachHidden){
-        lastToggleAt=Date.now();
-        void request("control",{hidden:true});
-      }
+      // The persisted Chrome preference is authoritative on startup.
+      // A previous session can leave Python paused even after the tab is visible.
+      lastToggleAt=Date.now();
+      void request("control",{hidden:coachHidden}).then(response=>{
+        // If startup briefly encountered a paused server, retry without
+        // waiting for the normal ten-second error backoff.
+        if(response?.ok&&!coachHidden&&retryAt>Date.now()){
+          retryAt=0;healthChecked=false;analysisPending=true;generation++;
+          schedule(0);
+        }
+      });
       if(!coachHidden)resume();
     });
   else resume();
