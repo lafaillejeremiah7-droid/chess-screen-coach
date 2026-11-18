@@ -1,4 +1,4 @@
-"""Minimal terminal-hosted Stockfish 19 analysis service. Full UCI strength."""
+"""Minimal full-strength Stockfish 19 service; latest board request takes priority."""
 from __future__ import annotations
 
 import json
@@ -14,8 +14,26 @@ ENGINE_PATH = ROOT / ".stockfish" / "bin" / "stockfish"
 ANALYSIS_SECONDS = 1.0
 ENGINE = None
 ENGINE_LOCK = threading.Lock()
+REQUEST_LOCK = threading.Lock()
+LATEST_REQUEST = 0
 PIECES = {"p": "pawn", "n": "knight", "b": "bishop",
           "r": "rook", "q": "queen", "k": "king"}
+
+
+class SupersededRequest(Exception):
+    """A newer live board is available; do not analyze or return an older one."""
+
+
+def issue_request() -> int:
+    global LATEST_REQUEST
+    with REQUEST_LOCK:
+        LATEST_REQUEST += 1
+        return LATEST_REQUEST
+
+
+def is_latest(token: int) -> bool:
+    with REQUEST_LOCK:
+        return token == LATEST_REQUEST
 
 
 def start_engine():
@@ -29,7 +47,7 @@ def start_engine():
     return engine
 
 
-def analyze(fen: str):
+def position_from_fen(fen: str) -> chess.Board:
     if not isinstance(fen, str) or len(fen) > 120:
         raise ValueError("Invalid FEN")
     try:
@@ -40,8 +58,19 @@ def analyze(fen: str):
         raise ValueError("Invalid board position")
     if board.is_game_over():
         raise ValueError("Game over: no legal move")
+    return board
+
+
+def analyze(fen: str, request_token: int | None = None):
+    board = position_from_fen(fen)
     with ENGINE_LOCK:
+        # Lock waiters are checked before using CPU: obsolete searches are skipped.
+        if request_token is not None and not is_latest(request_token):
+            raise SupersededRequest()
         result = ENGINE.play(board, chess.engine.Limit(time=ANALYSIS_SECONDS))
+        # A new board can arrive during this one-second search.
+        if request_token is not None and not is_latest(request_token):
+            raise SupersededRequest()
     move = result.move
     if move is None or move not in board.legal_moves:
         raise RuntimeError("Stockfish did not return a legal move")
@@ -57,11 +86,15 @@ def analyze(fen: str):
 class Handler(BaseHTTPRequestHandler):
     def reply(self, status, payload):
         data = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            # The browser has already aborted a superseded request.
+            pass
 
     def do_GET(self):
         if self.path == "/health":
@@ -80,7 +113,12 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Expected a JSON object")
-            self.reply(200, analyze(body.get("fen")))
+            fen = body.get("fen")
+            position_from_fen(fen)
+            token = issue_request()
+            self.reply(200, analyze(fen, token))
+        except SupersededRequest:
+            self.reply(409, {"error": "Superseded by newer board"})
         except (ValueError, json.JSONDecodeError) as error:
             self.reply(400, {"error": str(error)})
         except Exception as error:
