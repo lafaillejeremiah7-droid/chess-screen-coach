@@ -65,7 +65,9 @@ async function analyze(body){
   const fen=body.fen;
   const board=parseBoard(fen);
   if(board.isGameOver())throw Error("Game over; no legal move available");
-  const seconds=[0.2,0.5,1,2].includes(body.seconds)?body.seconds:1;
+  const seconds=body.seconds===undefined?1:body.seconds;
+  if(typeof seconds!=="number"||!Number.isFinite(seconds)||seconds<0.1||seconds>120)
+    throw Error("Analysis time must be between 0.1 and 120 seconds");
   const elo=body.elo==="full"||body.elo===undefined?"full":body.elo;
   if(elo!=="full"&&(!Number.isInteger(elo)||elo<1320||elo>3190))
     throw Error("Invalid engine strength");

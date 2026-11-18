@@ -19,7 +19,7 @@ test("build contains local engine JS, WASM, license and offscreen document",()=>
     "A Lite-sized WASM file must never ship in the Full-only build");
   assert.throws(()=>statSync(join(dist,"engine/stockfish-19-lite-single.wasm")));
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.version,"0.7.1");
+  assert.equal(manifest.version,"0.7.2");
   assert.ok(manifest.permissions.includes("offscreen"));
   assert.match(manifest.content_security_policy.extension_pages,/wasm-unsafe-eval/);
   assert.equal(manifest.host_permissions.some(x=>/127\.0\.0\.1|localhost/.test(x)),false);

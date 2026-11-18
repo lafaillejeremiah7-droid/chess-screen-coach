@@ -318,7 +318,7 @@ test('explicit Black side overrides White-at-bottom orientation',async()=>{
   assert.equal(h.requests.at(-1).seconds,0.5);
   assert.equal(h.requests.at(-1).fen,e4+' b KQkq - 0 1');
 });
-test('optional analysis diagnostics render on practice pages only',async()=>{
+test('optional analysis diagnostics render on every supported Chess.com route',async()=>{
   const respond=m=>m.action==='analyze'
     ?{ok:true,instruction:'Move pawn from e2 to e4',reason:'Occupies the center.',depth:17,score_cp:45}:undefined;
   const settings={playerSide:'w',thinkSeconds:1,showDetails:true};
@@ -329,7 +329,20 @@ test('optional analysis diagnostics render on practice pages only',async()=>{
   assert.equal(practice.requests.at(-1).seconds,1);
   const other=harness(respond,'/play/online',settings);
   await other.advance(0);
-  assert.equal(other.text,'Move pawn from e2 to e4');
+  assert.match(other.text,/Depth 17/);
+  assert.match(other.text,/Eval 0.45/);
+});
+test('custom live analysis time can exceed the old two-second cap',async()=>{
+  const h=harness(undefined,'/game/live/123',{playerSide:'w',thinkSeconds:7.5});
+  await h.advance(0);
+  assert.equal(h.requests.at(-1).action,'analyze');
+  assert.equal(h.requests.at(-1).seconds,7.5);
+  assert.equal(h.requests.at(-1).elo,'full');
+});
+test('invalid search duration falls back to the one-second default',async()=>{
+  const h=harness(undefined,'/play/online',{playerSide:'w',thinkSeconds:Infinity});
+  await h.advance(0);
+  assert.equal(h.requests.at(-1).seconds,1);
 });
 test('transient malformed board recovers without another mutation event',async()=>{
   const h=harness();await h.advance(0);

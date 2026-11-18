@@ -127,7 +127,8 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
        body.moves.every(x=>typeof x==="string"&&x.length<=14)&&
        typeof body.placement==="string"&&body.placement.length<=90:
      typeof body.fen==="string"&&body.fen.length<=120&&
-       (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds))&&
+       (body.seconds===undefined||(typeof body.seconds==="number"&&Number.isFinite(body.seconds)&&
+          body.seconds>=0.1&&body.seconds<=120))&&
        (body.elo===undefined||body.elo==="full"||
         (Number.isInteger(body.elo)&&body.elo>=1320&&body.elo<=3190)));
   if(!valid){sendResponse({ok:false,status:400,error:"Invalid chess position"});return false;}
