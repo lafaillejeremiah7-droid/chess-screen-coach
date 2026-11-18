@@ -54,7 +54,11 @@ function startEngine(){
       reject(error);
     }
   });
-  return initializing;
+  // A synchronous Worker construction error can reject before the assignment
+  // above completes. Never cache that rejected promise permanently.
+  const attempt=initializing;
+  void attempt.catch(()=>{if(initializing===attempt)initializing=null;});
+  return attempt;
 }
 function enqueue(job){
   const next=queue.catch(()=>{}).then(job);
