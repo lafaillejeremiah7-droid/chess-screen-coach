@@ -33,6 +33,8 @@ function harness(placement,attributes={}){
   const doc={
     querySelectorAll(selector){
       if(selector.includes('move')||selector.includes('ply'))throw Error('History must not be queried');
+      if(selector.includes('clock-component'))return attributes.clocks||[];
+      if(selector.includes('turn-indicator'))return attributes.indicators||[];
       return [board];
     }
   };
@@ -81,11 +83,9 @@ test('unknown castling and en passant rights are not invented',()=>{
   assert.equal(pos.fen,middle+' w - - 0 1');
   assert.equal(pos.rulesVerified,false);
 });
-test('unknown turn is marked as assumed, never silently verified',()=>{
+test('unknown turn refuses to construct an assumed active position',()=>{
   const h=harness(middle);
-  const pos=h.reader.currentFen(h.reader.snapshot(h.doc),'b');
-  assert.equal(pos.fen,middle+' b - - 0 1');
-  assert.equal(pos.turnVerified,false);
+  assert.throws(()=>h.reader.currentFen(h.reader.snapshot(h.doc),'b'),/Turn unknown/);
 });
 test('board orientation does not change piece squares or side to move',()=>{
   const white=harness(middle,{'data-turn':'b'});
@@ -103,4 +103,93 @@ test('initial board is not assumed to restore lost castling rights',()=>{
   const h=harness(initial,{'data-turn':'w'});
   const pos=h.reader.currentFen(h.reader.snapshot(h.doc),'w');
   assert.equal(pos.fen,initial+' w - - 0 1');
+});
+
+function fakeClock(classes,attrs={}){
+  const names=classes.split(/\s+/);
+  return {
+    className:classes,
+    classList:{contains(name){return names.includes(name);}},
+    getAttribute(name){return name==="class"?classes:attrs[name]??null;},
+    closest(){return null;}
+  };
+}
+test('white active clock verifies White to move',()=>{
+  const h=harness(middle,{clocks:[
+    fakeClock('clock-component clock-white clock-player-turn'),
+    fakeClock('clock-component clock-black')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'w');
+  assert.equal(snapshot.turnSource,'clock');
+  assert.equal(h.reader.currentFen(snapshot).fen,middle+' w - - 0 1');
+});
+test('black active clock verifies Black to move even if White is at the bottom',()=>{
+  const h=harness(middle,{clocks:[
+    fakeClock('clock-component clock-white'),
+    fakeClock('clock-component clock-black clock-player-turn')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'b');
+  assert.equal(snapshot.turnSource,'clock');
+});
+test('flipped board maps active top/bottom clocks only when orientation is explicitly known',()=>{
+  const h=harness(middle,{classFlag:'flipped',clocks:[
+    fakeClock('clock-component clock-top clock-player-turn'),
+    fakeClock('clock-component clock-bottom')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'w');
+  assert.equal(snapshot.turnSource,'clock');
+});
+test('an uncolored active top clock without confirmed orientation is not treated as turn evidence',()=>{
+  const h=harness(middle,{clocks:[
+    fakeClock('clock-component clock-top clock-player-turn'),
+    fakeClock('clock-component clock-bottom')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,null);
+  assert.throws(()=>h.reader.currentFen(snapshot),/Turn unknown/);
+});
+test('both clocks active is an explicit conflict and does not produce a suggestion FEN',()=>{
+  const h=harness(middle,{clocks:[
+    fakeClock('clock-component clock-white clock-player-turn'),
+    fakeClock('clock-component clock-black clock-player-turn')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turnConflict,true);
+  assert.throws(()=>h.reader.currentFen(snapshot),/Turn indicators disagree/);
+});
+test('conflicting clock and embedded FEN refuses an untrusted turn',()=>{
+  const full=middle+' w - - 0 10';
+  const h=harness(middle,{'data-fen':full,clocks:[
+    fakeClock('clock-component clock-black clock-player-turn')
+  ]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turnConflict,true);
+  assert.throws(()=>h.reader.currentFen(snapshot),/Turn indicators disagree/);
+});
+test('active clock without a color and without a turn indicator is insufficient',()=>{
+  const h=harness(middle,{clocks:[fakeClock('clock-component clock-running')]});
+  assert.equal(h.reader.snapshot(h.doc).turn,null);
+});
+test('explicit turn-indicator text can independently verify the active side',()=>{
+  const indicator={textContent:'Black to move',getAttribute(){return null;}};
+  const h=harness(middle,{indicators:[indicator]});
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'b');
+  assert.equal(snapshot.turnSource,'indicator');
+});
+test('conflicting explicit board turn and active clock suppress analysis',()=>{
+  const h=harness(middle,{'data-turn':'white',clocks:[
+    fakeClock('clock-component clock-black clock-player-turn')
+  ]});
+  assert.equal(h.reader.snapshot(h.doc).turnConflict,true);
+});
+test('inactive clocks are not evidence for whose turn it is',()=>{
+  const h=harness(middle,{clocks:[
+    fakeClock('clock-component clock-white'),
+    fakeClock('clock-component clock-black')
+  ]});
+  assert.throws(()=>h.reader.currentFen(h.reader.snapshot(h.doc)),/Turn unknown/);
 });
