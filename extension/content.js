@@ -11,7 +11,6 @@
   }
   // Ignore a second injection into the same extension execution context.
   if(globalThis.__ChessCoachContentActive)return;
-  globalThis.__ChessCoachContentActive=true;
   const INITIAL=reader.initial+" w KQkq - 0 1";
   const SETTLE_MS=180, RETRY_MS=10000;
   let currentFen=null,lastPlacement=null,currentBoard=null,lastColor=null;
@@ -408,6 +407,10 @@
     });
     return false;
   });
+  // Display a startup status even if the Chrome storage callback is delayed.
+  // Set the idempotency guard only after all listeners have been registered.
+  show("Chess Study Coach initializing…");
+  globalThis.__ChessCoachContentActive=true;
   // Read the saved hidden state before starting the observer or engine requests.
   if(chrome.storage?.local?.get)
     chrome.storage.local.get(settings,values=>{
