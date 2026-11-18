@@ -131,3 +131,9 @@ test('extracts complete SAN history for recovery after several unseen moves',()=
   const doc={querySelectorAll(selector){return selector==='[data-ply]'?nodes:[];}};
   assert.deepEqual(globalThis.ChessCoachBoard.readMoveHistory(doc),history);
 });
+
+test('a matching FEN with extra whitespace keeps a usable turn field',()=>{
+  const nodes=classesFromFen(initial).map(cls=>fakePiece(cls));
+  const board=fakeBoard(480,nodes,{'data-fen':initial+'   b\tKQkq - 0 1'});
+  assert.equal(snapshot({querySelectorAll(){return [board];}}).fen,initial+' b KQkq - 0 1');
+});

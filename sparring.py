@@ -65,7 +65,10 @@ def play_practice_turn(fen, move_uci, elo, engine_path=None, engine_factory=None
                 raise ValueError("Invalid practice history")
             replay = chess.Board()
             for item in moves:
-                replay.push_uci(item)
+                history_move = replay.parse_uci(item)
+                if not history_move:
+                    raise ValueError("Practice history contains a skipped turn")
+                replay.push(history_move)
             if replay.fen() != board.fen():
                 raise ValueError("Practice history does not match board")
             board = replay

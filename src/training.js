@@ -4,6 +4,7 @@ const glyph={K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",k:"♚",q:"♛",r:"
 const STORE="chess-coach-adaptive-v1";
 let bank=[],current=null,selected=null,sessionStarted=false,answered=0,deadline=0;
 let waiting=false,feedback=false,hidden=false,controlChanged=0;
+let controlPolling=false,controlRevision=0;
 let sessionToken=0,timerPaused=false,timerRemaining=10000;
 const isPaused=()=>hidden||document.hidden;
 function syncTimerPause(){
@@ -190,6 +191,7 @@ async function submitMove(forced=null){
 }
 function updateHidden(paused){
   if(hidden===paused)return;
+  controlRevision++;
   hidden=paused;document.body.classList.toggle('trainer-paused',paused);
   syncTimerPause();
   if(paused){notice("Coach hidden. Press H to show it.");}
@@ -235,10 +237,16 @@ setInterval(()=>{
   updateClock();
 },150);
 setInterval(async()=>{
-  if(Date.now()-controlChanged<1800)return;
+  if(controlPolling||Date.now()-controlChanged<1800)return;
+  controlPolling=true;
+  const revision=controlRevision;
   try{
     const response=await fetch('/api/control');
-    if(response.ok){const data=await response.json();updateHidden(data.hidden===true);}
+    if(response.ok){
+      const data=await response.json();
+      if(revision===controlRevision&&typeof data.hidden==="boolean")updateHidden(data.hidden);
+    }
   }catch{}
+  finally{controlPolling=false;}
 },1500);
 showStats();

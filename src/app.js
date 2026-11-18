@@ -11,7 +11,7 @@ const captureProbeCtx=captureProbe.getContext('2d',{willReadFrequently:true});
 let video=null, stream=null, screenshot=null, templates=null, crop=null, drag=null;
 let currentFen=null, pipWin=null, busy=false, requestNumber=0;
 let previewTimer=null, captureInterrupted=false,coachHidden=false,wasFloating=false,lastControlAt=0;
-let captureVersion=0;
+let captureVersion=0,controlRevision=0,controlPolling=false;
 function invalidateCapture(){captureVersion++;requestNumber++;}
 const placement = fen => fen.split(' ')[0];
 const startingPlacement = placement(INITIAL);
@@ -28,7 +28,7 @@ function refreshStrength(){
   strengthControl.disabled=fullStrengthControl.checked;
   localStorage.setItem('chessCoachMainElo',strengthControl.value);
   localStorage.setItem('chessCoachMainFull',String(fullStrengthControl.checked));
-  invalidateCapture();
+  ++requestNumber;
   if(currentFen&&!coachHidden&&currentFen.split(' ')[1]===$('myColor').value)
     void recommend(currentFen);
 }
@@ -274,6 +274,7 @@ $('orientation').onchange=()=>{
 };
 $('turn').onchange=()=>{invalidateCapture();currentFen=null;status('Turn changed. Select Read / resync board.');};
 $('myColor').onchange=()=>{
+  ++requestNumber;
   if(currentFen && currentFen.split(' ')[1]===$('myColor').value) recommend(currentFen);
   else display('Waiting for your turn');
 };
@@ -310,6 +311,7 @@ $('float').onclick=()=>{if(!coachHidden)void openFloating();};
 function updatePaused(hidden){
   if(coachHidden===hidden)return;
   coachHidden=hidden;
+  controlRevision++;
   invalidateCapture(); // Pending recognition and move responses are stale.
   document.body.classList.toggle('coach-paused',hidden);
   if(hidden){
@@ -345,13 +347,16 @@ document.addEventListener('keydown',handleCoachKey,true);
 
 // When H is pressed in a Chess.com tab, the extension updates the same server.
 setInterval(async()=>{
-  if(Date.now()-lastControlAt<1900)return;
+  if(controlPolling||Date.now()-lastControlAt<1900)return;
+  controlPolling=true;
+  const revision=controlRevision;
   try{
     const response=await fetch('/api/control');
     if(!response.ok)return;
     const state=await response.json();
-    if(typeof state.hidden==='boolean')updatePaused(state.hidden);
+    if(revision===controlRevision&&typeof state.hidden==='boolean')updatePaused(state.hidden);
   }catch{/* Local Python server not available. */}
+  finally{controlPolling=false;}
 },1400);
 
 setInterval(()=>{
@@ -363,7 +368,7 @@ setInterval(()=>{
     const res=await fetch('/api/health');
     if(!res.ok)throw Error('Python server unavailable');
     const health=await res.json();
-    if(!health.stockfish)status('Install Stockfish with sudo apt install stockfish, then restart python server.py');
+    if(!health.stockfish)status('Run python3 scripts/install_stockfish19.py, then restart the local server.');
     else status('Python + Stockfish ready. Share your board.');
     templates=await loadTemplates();
   } catch(error){status('Setup error: '+error.message);}
