@@ -80,13 +80,13 @@ function harness(respond,pathname='/play/computer',options=null){
         if(state.missing)return null;
         return {...state};
       },
-      currentFen(snapshot,assumed){
+      currentFen(snapshot){
+        if(snapshot.turnConflict)throw Error('Turn indicators disagree; waiting for synchronization.');
+        if(!snapshot.turn)throw Error('Turn unknown — waiting for active clock or turn indicator.');
         if(snapshot.fen)return {fen:snapshot.fen,turnVerified:true,rulesVerified:true};
-        const turn=snapshot.turn||assumed;
-        if(!turn)throw Error('side to move unknown');
-        return {fen:snapshot.placement+' '+turn+' '+(snapshot.castling||'-')+
+        return {fen:snapshot.placement+' '+snapshot.turn+' '+(snapshot.castling||'-')+
             ' '+(snapshot.enPassant||'-')+' 0 1',
-          turnVerified:!!snapshot.turn,
+          turnVerified:true,
           rulesVerified:snapshot.castling!=null&&snapshot.enPassant!=null};
       }
     }
@@ -177,12 +177,31 @@ test('current DOM turn can suppress a suggestion on the opponent turn',async()=>
   h.state.turn='w';h.mutate();await h.advance(250);
   assert.equal(analyses(h).length,1);
 });
-test('without turn metadata the label identifies a conditional suggestion',async()=>{
+test('without turn metadata the agent withholds moves until a clock verifies the turn',async()=>{
   const h=harness();
   h.state.placement=middle;h.state.turn=null;h.state.castling='-';
   await h.advance(0);
+  assert.equal(analyses(h).length,0);
+  assert.match(h.text,/Turn unknown/);
+  h.state.turn='w';h.mutate();await h.advance(250);
+  assert.equal(analyses(h).length,1);
   assert.equal(analyses(h)[0].fen,middle+' w - - 0 1');
-  assert.match(h.text,/Turn unverified/);
+});
+test('contradictory turn indicators suppress search and recover after synchronization',async()=>{
+  const h=harness();
+  h.state.turnConflict=true;
+  await h.advance(0);
+  assert.equal(analyses(h).length,0);
+  assert.match(h.text,/Turn indicators disagree/);
+  h.state.turnConflict=false;
+  h.mutate();await h.advance(250);
+  assert.equal(analyses(h).length,1);
+});
+test('a verified opponent turn never receives an engine instruction',async()=>{
+  const h=harness();
+  h.state.turn='b';await h.advance(0);
+  assert.equal(analyses(h).length,0);
+  assert.equal(h.text,'Waiting for opponent');
 });
 test('current verified page FEN always outranks inferred turn and rights',async()=>{
   const h=harness(undefined,'/analysis');
