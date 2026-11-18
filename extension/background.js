@@ -1,4 +1,4 @@
-/* Chess.com position bridge: only contacts the user's local Python service. */
+/* Chess.com position bridge: self-contained Stockfish WASM, no Python server. */
 "use strict";
 function permitted(urlString){
   try{
@@ -54,6 +54,31 @@ chrome.runtime.onInstalled?.addListener?.(()=>{
     .then(tabs=>Promise.all(tabs.map(tab=>recoverTab(tab.id)))).catch(()=>{});
 });
 
+// Offscreen documents can host a Web Worker; MV3 service workers cannot
+// reliably own long-running WASM searches across suspension/restarts.
+let creatingOffscreen=null;
+async function ensureOffscreen(){
+  if(creatingOffscreen)return creatingOffscreen;
+  creatingOffscreen=(async()=>{
+    if(await chrome.offscreen.hasDocument())return;
+    await chrome.offscreen.createDocument({
+      url:"offscreen.html",
+      reasons:["WORKERS"],
+      justification:"Run the bundled local Stockfish 19 WASM engine for chess analysis."
+    });
+  })();
+  try{await creatingOffscreen;}
+  finally{creatingOffscreen=null;}
+}
+async function engineRequest(action,body){
+  await ensureOffscreen();
+  // Only extension-owned offscreen.html receives this targeted message.
+  const response=await chrome.runtime.sendMessage({target:"standalone-engine",action,body});
+  if(!response||typeof response.ok!=="boolean")
+    throw Error("Standalone engine did not respond. Install the complete built extension.");
+  return response;
+}
+
 chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   if(message?.action==="repairTab"&&sender?.id===chrome.runtime.id){
     if(!Number.isInteger(message.tabId)||message.tabId<0){
@@ -62,17 +87,19 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     void ensureTab(message.tabId).then(sendResponse);
     return true;
   }
-  if(!permitted(sender.url||"") || !message ||
-     !["track","recover","analyze","health","control"].includes(message.action))
+  const fromChess=permitted(sender?.url||"");
+  const fromExtension=sender?.id===chrome.runtime.id &&
+    typeof sender?.url==="string" &&
+    sender.url.startsWith("chrome-extension://"+chrome.runtime.id+"/");
+  if(!message||!["track","recover","analyze","health","control"].includes(message.action)||
+     (!fromChess&&!(fromExtension&&["health","control"].includes(message.action))))
     return false;
   const action=message.action;
-  const paths={track:"/api/track",recover:"/api/recover",analyze:"/api/analyze",
-               health:"/api/health",control:"/api/control"};
-  let body;
-  if(action==="track") body={previous:message.previous,placement:message.placement};
-  else if(action==="recover") body={moves:message.moves,placement:message.placement};
-  else if(action==="analyze") body={fen:message.fen,seconds:message.seconds,elo:message.elo};
-  else if(action==="control" && typeof message.hidden==="boolean")body={hidden:message.hidden};
+  let body={};
+  if(action==="track")body={previous:message.previous,placement:message.placement};
+  else if(action==="recover")body={moves:message.moves,placement:message.placement};
+  else if(action==="analyze")body={fen:message.fen,seconds:message.seconds,elo:message.elo};
+  else if(action==="control"&&typeof message.hidden==="boolean")body={hidden:message.hidden};
   const valid=action==="health"||action==="control"||
     (action==="track"?typeof body.previous==="string"&&body.previous.length<=120&&
        typeof body.placement==="string"&&body.placement.length<=90:
@@ -83,22 +110,10 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
        (body.seconds===undefined||[0.2,0.5,1,2].includes(body.seconds))&&
        (body.elo===undefined||body.elo==="full"||
         (Number.isInteger(body.elo)&&body.elo>=1320&&body.elo<=3190)));
-  if(!valid){sendResponse({ok:false,error:"Invalid chess position"});return false;}
-  (async()=>{
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),8000);
-    try{
-      const response=await fetch("http://127.0.0.1:8765"+paths[action],{
-        method:body===undefined?"GET":"POST",
-        headers:body===undefined?{}:{"Content-Type":"application/json"},
-        body:body===undefined?undefined:JSON.stringify(body),
-        signal:controller.signal
-      });
-      const data=await response.json();
-      sendResponse(response.ok?{ok:true,...data}:{ok:false,status:response.status,error:data.error||"Python error"});
-    }catch(error){
-      sendResponse({ok:false,error:"Python server unavailable. Start python3 server.py in Linux Terminal."});
-    }finally{clearTimeout(timeout);}
-  })();
+  if(!valid){sendResponse({ok:false,status:400,error:"Invalid chess position"});return false;}
+  void engineRequest(action,body).then(sendResponse).catch(error=>{
+    sendResponse({ok:false,error:"Standalone Stockfish unavailable: "+
+      String(error?.message||error)+". Use the packaged extension ZIP from GitHub Actions."});
+  });
   return true;
 });
