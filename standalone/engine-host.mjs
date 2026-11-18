@@ -69,12 +69,7 @@ async function analyze(body){
   const fen=body.fen;
   const board=parseBoard(fen);
   if(board.isGameOver())throw Error("Game over; no legal move available");
-  const seconds=body.seconds===undefined?1:body.seconds;
-  if(typeof seconds!=="number"||!Number.isFinite(seconds)||seconds<0.1||seconds>120)
-    throw Error("Analysis time must be between 0.1 and 120 seconds");
-  const elo=body.elo==="full"||body.elo===undefined?"full":body.elo;
-  if(elo!=="full"&&(!Number.isInteger(elo)||elo<1320||elo>3190))
-    throw Error("Invalid engine strength");
+  const seconds=1; // Live search duration, never an Elo or strength cap.
   return enqueue(async()=>{
     await startEngine();
     const result=await new Promise((resolve,reject)=>{
@@ -85,25 +80,18 @@ async function analyze(body){
       },Math.round(seconds*1000)+8000);
       pending={resolve,reject,timer};
       try{
-        engine.postMessage(`setoption name UCI_LimitStrength value ${elo==="full"?"false":"true"}`);
-        if(elo!=="full")engine.postMessage(`setoption name UCI_Elo value ${elo}`);
+        engine.postMessage("setoption name UCI_LimitStrength value false");
         engine.postMessage(`position fen ${fen}`);
         engine.postMessage(`go movetime ${Math.round(seconds*1000)}`);
       }catch(error){resetEngine(error);}
     });
     const move=formatMove(fen,result.move);
-    return {...move,elo,seconds,engine:"Stockfish 19 Full (single-threaded WASM)",
+    return {...move,seconds,engine:"Stockfish 19 Full (single-threaded WASM)",
       depth:result.depth??null,score_cp:result.score_cp??null,mate_in:result.mate_in??null};
   });
 }
 async function dispatch(action,body={}){
   if(action==="ping")return {ready:true,host:"offscreen",engine:"Stockfish 19 Full"};
-  if(action==="health"){
-    await startEngine();
-    return {stockfish:true,python:false,standalone:true,engine:"Stockfish 19 Full (single-threaded WASM)"};
-  }
-  // Visibility is managed by the extension service worker, which has
-  // chrome.storage access. Chrome offscreen documents only have runtime.
   if(action==="analyze")return analyze(body);
   throw Error("Unknown engine request");
 }
