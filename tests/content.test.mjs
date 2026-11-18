@@ -19,7 +19,22 @@ function harness(respond,pathname='/play/computer',options=null){
     hidden:false,
     body:{appendChild(element){elements.set(element.id,element);}},
     getElementById(id){return elements.get(id);},
-    createElement(){return {setAttribute(){},remove(){elements.delete(this.id);}};},
+    createElement(){
+      const element={setAttribute(){},remove(){elements.delete(this.id);}};
+      if(options?.shadowSupport){
+        element.style={setProperty(){}};
+        element.attachShadow=()=>{
+          const children=new Map();
+          const root={
+            appendChild(child){if(child.id)children.set(child.id,child);},
+            getElementById(id){return children.get(id);}
+          };
+          element.shadowRoot=root;
+          return root;
+        };
+      }
+      return element;
+    },
     addEventListener(name,callback){const listeners=events.get(name)||[];listeners.push(callback);events.set(name,listeners);}
   };
   const location={pathname,protocol:'https:',hostname:'www.chess.com'};
@@ -66,6 +81,7 @@ function harness(respond,pathname='/play/computer',options=null){
     get reads(){return reads;},
     get timerCount(){return timers.size;},
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
+    get shadowText(){return elements.get('chess-study-no-share-overlay')?.shadowRoot?.getElementById('chess-study-no-share-overlay-text')?.textContent;},
     diagnostic(){
       let response=null;
       for(const listener of contentListeners)
@@ -88,6 +104,18 @@ function harness(respond,pathname='/play/computer',options=null){
     }
   };
 }
+
+test('Shadow DOM label receives startup, analysis and updated results',async()=>{
+  const h=harness(undefined,'/play/computer',{shadowSupport:true,coachHidden:false});
+  assert.match(h.shadowText,/Chess Study Coach active/);
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+  assert.equal(h.shadowText,h.text);
+  h.state.missing=true;
+  h.mutate();
+  await h.advance(200);
+  assert.match(h.shadowText,/Chessboard unavailable/);
+});
 
 test('visible content script immediately reports startup instead of remaining blank',async()=>{
   const h=harness();
