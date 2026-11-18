@@ -338,3 +338,26 @@ test('all supported Chess.com paths use current-board mode',async()=>{
     assertNoHistory(h);
   }
 });
+
+test('a changed board bypasses the retry delay from the previous failed position',async()=>{
+  let calls=0;
+  const h=harness(m=>m.action==='analyze'&&++calls===1?
+    {ok:false,error:'Temporary engine issue'}:undefined);
+  await h.advance(0);
+  assert.equal(analyses(h).length,1);
+  h.state.placement=middle;h.state.turn='w';h.state.castling='-';
+  h.mutate();await h.advance(250);
+  assert.equal(analyses(h).length,2);
+  assert.equal(analyses(h)[1].fen,middle+' w - - 0 1');
+  assert.match(h.text,/Move pawn/);
+});
+test('an unchanged failed board backs off before retrying',async()=>{
+  let calls=0;
+  const h=harness(m=>m.action==='analyze'&&++calls===1?
+    {ok:false,error:'Temporary engine issue'}:undefined);
+  await h.advance(0);
+  await h.advance(1100);
+  assert.equal(analyses(h).length,1);
+  await h.advance(1100);
+  assert.equal(analyses(h).length,2);
+});
