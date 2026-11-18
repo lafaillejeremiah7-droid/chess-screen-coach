@@ -1,0 +1,69 @@
+name: Build standalone Chrome extension
+
+on:
+  push:
+    branches:
+      - main
+      - feature/standalone-stockfish19-extension-0611
+    paths:
+      - standalone/**
+      - scripts/build-standalone.mjs
+      - extension/**
+      - package.json
+      - .github/workflows/standalone.yml
+  pull_request:
+    paths:
+      - standalone/**
+      - scripts/build-standalone.mjs
+      - extension/**
+      - package.json
+      - .github/workflows/standalone.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  standalone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser engine and chess rules
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Check existing extension regression tests
+        run: npm test
+      - name: Package completely offline Chrome extension
+        run: npm run build:standalone
+      - name: Verify locally bundled engine and legal moves
+        run: node --test standalone/test-built.mjs
+      - name: Scan packaged extension for accidental localhost requirement
+        run: |
+          if grep -R -n -E '127\.0\.0\.1:8765|localhost:8765' \
+             dist/chess-screen-coach-standalone/*.js ; then
+            echo "ERROR: standalone extension still calls the Python server"
+            exit 1
+          fi
+      - name: Package ZIP for Chromebook installation
+        run: |
+          cd dist
+          zip -q -r ../chess-screen-coach-standalone-v0.7.0.zip chess-screen-coach-standalone
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chess-screen-coach-standalone-v0.7.0
+          path: chess-screen-coach-standalone-v0.7.0.zip
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish standalone ZIP as a GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.7.0 chess-screen-coach-standalone-v0.7.0.zip \
+            --target "${GITHUB_SHA}" \
+            --title "Chess Screen Coach v0.7.0 — standalone Chromebook extension" \
+            --notes "Includes Stockfish 19 Lite WASM and chess.js locally. No Linux Terminal, localhost, Python server, or separate engine installation required. Download the standalone ZIP, extract it, open chrome://extensions, then Load unpacked using the chess-screen-coach-standalone folder." \
+          || gh release upload v0.7.0 chess-screen-coach-standalone-v0.7.0.zip --clobber
