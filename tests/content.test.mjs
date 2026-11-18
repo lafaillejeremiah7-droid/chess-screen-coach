@@ -361,3 +361,15 @@ test('an unchanged failed board backs off before retrying',async()=>{
   await h.advance(1100);
   assert.equal(analyses(h).length,2);
 });
+
+test('a same-tab new game re-detects the player color rather than keeping the old game side',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.state.placement=middle;h.state.castling='-';
+  h.mutate();await h.advance(250);
+  h.state.board={isConnected:true};
+  h.state.placement=initial;h.state.turn='b';
+  h.state.myColor='b';h.state.bottomColor='b';h.state.castling='KQkq';
+  await h.advance(1000);
+  assert.equal(analyses(h).at(-1).fen,initial+' b KQkq - 0 1');
+});
