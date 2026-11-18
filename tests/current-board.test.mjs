@@ -64,7 +64,7 @@ test('page FEN is used only when its pieces match the current screen',()=>{
 });
 test('verified FEN includes site supplied turn, castling and en passant',()=>{
   const full=middle+' b KQ - 0 10';
-  const h=harness(middle,{'data-fen':full,'data-turn':'white'});
+  const h=harness(middle,{'data-fen':full,'data-turn':'black'});
   const pos=h.reader.currentFen(h.reader.snapshot(h.doc),'w');
   assert.equal(pos.fen,full);
   assert.equal(pos.turnVerified,true);
@@ -192,4 +192,23 @@ test('inactive clocks are not evidence for whose turn it is',()=>{
     fakeClock('clock-component clock-black')
   ]});
   assert.throws(()=>h.reader.currentFen(h.reader.snapshot(h.doc)),/Turn unknown/);
+});
+
+test('clock search is scoped to the current board layout when possible',()=>{
+  const h=harness(middle);
+  const actual=[
+    fakeClock('clock-component clock-white clock-player-turn'),
+    fakeClock('clock-component clock-black')
+  ];
+  const unrelated=[fakeClock('clock-component clock-black clock-player-turn')];
+  h.board.closest=selector=>selector.includes('board-layout')
+    ?{querySelectorAll(){return actual;}}:null;
+  h.doc.querySelectorAll=selector=>{
+    if(selector.includes('clock-component'))return unrelated;
+    if(selector.includes('turn-indicator'))return [];
+    return [h.board];
+  };
+  const snapshot=h.reader.snapshot(h.doc);
+  assert.equal(snapshot.turn,'w');
+  assert.equal(snapshot.turnConflict,false);
 });
