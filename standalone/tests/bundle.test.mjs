@@ -62,7 +62,6 @@ test("offscreen worker UCI and legal move formatting work without Python",async(
   assert.equal(result.instruction,"Move pawn from e2 to e4");
   assert.equal(result.depth,12);
   assert.ok(commands.includes("go movetime 200"));
-  const control=await request("control",{hidden:true});
-  assert.equal(control.hidden,true);
-  assert.equal((await request("control")).hidden,true);
+  // Offscreen documents cannot use chrome.storage; controls live in background.
+  assert.ok(!read("engine-host.js").includes("chrome.storage.local"));
 });

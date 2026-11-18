@@ -60,7 +60,13 @@ let creatingOffscreen=null;
 async function ensureOffscreen(){
   if(creatingOffscreen)return creatingOffscreen;
   creatingOffscreen=(async()=>{
-    if(await chrome.offscreen.hasDocument())return;
+    // Chrome's hasDocument() is only available in much newer versions.
+    // getContexts() works on Chrome 116+ and covers Chromebook installs.
+    const url=chrome.runtime.getURL("offscreen.html");
+    const contexts=await chrome.runtime.getContexts({
+      contextTypes:["OFFSCREEN_DOCUMENT"],documentUrls:[url]
+    });
+    if(contexts.length)return;
     await chrome.offscreen.createDocument({
       url:"offscreen.html",
       reasons:["WORKERS"],
@@ -100,6 +106,20 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   else if(action==="recover")body={moves:message.moves,placement:message.placement};
   else if(action==="analyze")body={fen:message.fen,seconds:message.seconds,elo:message.elo};
   else if(action==="control"&&typeof message.hidden==="boolean")body={hidden:message.hidden};
+  // Offscreen documents have chrome.runtime messaging only, not
+  // chrome.storage. Store the shared H-key pause state in this service
+  // worker instead; the engine document handles search and rules only.
+  if(action==="control"){
+    void (async()=>{
+      if(typeof message.hidden==="boolean")
+        await chrome.storage.local.set({coachHidden:message.hidden});
+      const saved=await chrome.storage.local.get({coachHidden:false});
+      sendResponse({ok:true,hidden:saved.coachHidden===true});
+    })().catch(error=>sendResponse({
+      ok:false,error:"Could not update coach pause state: "+String(error?.message||error)
+    }));
+    return true;
+  }
   const valid=action==="health"||action==="control"||
     (action==="track"?typeof body.previous==="string"&&body.previous.length<=120&&
        typeof body.placement==="string"&&body.placement.length<=90:

@@ -2,7 +2,7 @@
 
 **No Linux Terminal, Python server, screen sharing, or localhost connection is required for the standalone Chrome extension.** It bundles **Stockfish 19 Lite (single-threaded WASM)**, a legal-move tracker (chess.js), and an offscreen engine worker. The engine runs locally inside Chrome. Lite is weaker than full desktop Stockfish 19; the separate Python dashboard is still available for those who want it.
 
-## Install the standalone extension on Chromebook
+**Compatibility:** Chrome 116 or later is required. The extension uses `chrome.runtime.getContexts()` for offscreen engine startup; pause/resume is managed by the background service worker so it does not depend on storage APIs unavailable in offscreen documents.\n\n## Install the standalone extension on Chromebook
 
 1. Open the [Standalone Chrome extension build](https://github.com/lafaillejeremiah7-droid/chess-screen-coach/actions/workflows/standalone-extension.yml) workflow.
 2. Open the newest **successful** workflow run for main. Download the artifact named `chess-screen-coach-standalone-v0.7.0` (sign in to GitHub if prompted).
