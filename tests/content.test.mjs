@@ -338,3 +338,38 @@ test('all supported Chess.com paths use current-board mode',async()=>{
     assertNoHistory(h);
   }
 });
+
+test('a changed board bypasses the retry delay from the previous failed position',async()=>{
+  let calls=0;
+  const h=harness(m=>m.action==='analyze'&&++calls===1?
+    {ok:false,error:'Temporary engine issue'}:undefined);
+  await h.advance(0);
+  assert.equal(analyses(h).length,1);
+  h.state.placement=middle;h.state.turn='w';h.state.castling='-';
+  h.mutate();await h.advance(250);
+  assert.equal(analyses(h).length,2);
+  assert.equal(analyses(h)[1].fen,middle+' w - - 0 1');
+  assert.match(h.text,/Move pawn/);
+});
+test('an unchanged failed board backs off before retrying',async()=>{
+  let calls=0;
+  const h=harness(m=>m.action==='analyze'&&++calls===1?
+    {ok:false,error:'Temporary engine issue'}:undefined);
+  await h.advance(0);
+  await h.advance(1100);
+  assert.equal(analyses(h).length,1);
+  await h.advance(1100);
+  assert.equal(analyses(h).length,2);
+});
+
+test('a same-tab new game re-detects the player color rather than keeping the old game side',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.state.placement=middle;h.state.castling='-';
+  h.mutate();await h.advance(250);
+  h.state.board={isConnected:true};
+  h.state.placement=initial;h.state.turn='b';
+  h.state.myColor='b';h.state.bottomColor='b';h.state.castling='KQkq';
+  await h.advance(1000);
+  assert.equal(analyses(h).at(-1).fen,initial+' b KQkq - 0 1');
+});

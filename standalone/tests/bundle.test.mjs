@@ -20,7 +20,7 @@ test("build contains local engine JS, WASM, license and offscreen document",()=>
     "A Lite-sized WASM file must never ship in the Full-only build");
   assert.throws(()=>statSync(join(dist,"engine/stockfish-19-lite-single.wasm")));
   const manifest=JSON.parse(read("manifest.json"));
-  assert.equal(manifest.version,"0.7.10");
+  assert.equal(manifest.version,"0.7.11");
   const html=read("offscreen.html");
   assert.ok(html.indexOf("offscreen-bootstrap.js")>=0);
   assert.ok(html.indexOf("offscreen-bootstrap.js")<html.indexOf("engine-host.js"),
@@ -76,4 +76,35 @@ test("offscreen worker UCI and legal move formatting work without Python",async(
   assert.ok(commands.includes("go movetime 200"));
   // Offscreen documents cannot use chrome.storage; controls live in background.
   assert.ok(!read("engine-host.js").includes("chrome.storage.local"));
+});
+
+test("a failed Stockfish Worker constructor does not poison future engine startups",async()=>{
+  const callbacks=[];
+  let constructions=0;
+  class Worker {
+    constructor(){
+      constructions++;
+      if(constructions===1)throw Error("Transient worker creation failure");
+    }
+    postMessage(command){
+      if(command==="uci")this.onmessage({data:"uciok"});
+      if(command==="isready")this.onmessage({data:"readyok"});
+    }
+    terminate(){}
+  }
+  const chrome={runtime:{
+    getURL:path=>"chrome-extension://test/"+path,
+    onMessage:{addListener:callback=>callbacks.push(callback)}
+  }};
+  vm.runInNewContext(read("engine-host.js"),
+    {chrome,Worker,setTimeout,clearTimeout,Promise,Error,Number,console});
+  const request=action=>new Promise(resolve=>{
+    callbacks[0]({target:"standalone-engine",action,body:{}},null,resolve);
+  });
+  const first=await request("health");
+  assert.equal(first.ok,false);
+  assert.match(first.error,/Transient worker creation failure/);
+  const second=await request("health");
+  assert.equal(second.ok,true);
+  assert.equal(constructions,2);
 });
