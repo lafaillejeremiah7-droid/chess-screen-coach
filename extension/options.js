@@ -117,6 +117,25 @@ $("checkChessPage").addEventListener("click",()=>{
   });
 });
 
+$("resyncChessPage").addEventListener("click",()=>{
+  $("pageStatus").textContent="Requesting a fresh board read…";
+  findChessTab(tab=>{
+    chrome.tabs.sendMessage(tab.id,{action:"coachResync"},response=>{
+      if(chrome.runtime.lastError){
+        $("pageStatus").textContent="Resync failed: "+chrome.runtime.lastError.message+
+          ". Try Repair page script first.";
+      }else if(!response?.ok){
+        $("pageStatus").textContent="Resync unavailable: "+
+          (response?.error||"No response from the Chess.com page.");
+      }else{
+        $("pageStatus").textContent=response.queued
+          ?"Board resync queued. Return to Chess.com to finish."
+          :"Resync started. Return to the Chess.com tab to see the updated position.";
+      }
+    });
+  });
+});
+
 $("reloadChessPage").addEventListener("click",()=>{
   $("pageStatus").textContent="Reloading a Chess.com tab…";
   findChessTab(tab=>{

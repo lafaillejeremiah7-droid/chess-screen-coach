@@ -32,7 +32,10 @@ function optionsHarness({tabs=[{id:42,active:false,lastAccessed:123}],reply={
     }},
     tabs:{
       query(filter,callback){actions.push({action:'query',filter});callback(tabs);},
-      sendMessage(tabId,message,callback){actions.push({action:'send',tabId,message});callback(reply);},
+      sendMessage(tabId,message,callback){
+        actions.push({action:'send',tabId,message});
+        callback(message.action==='coachResync'?{ok:true,started:true,queued:false}:reply);
+      },
       reload(tabId,callback){actions.push({action:'reload',tabId});callback();}
     }
   };
@@ -79,12 +82,24 @@ test('options page repairs the selected Chess.com tab through verified backgroun
   assert.match(ui.element('pageStatus').textContent,/Page script running/);
 });
 
+test('Resync board in extension options invokes page resync without reloading the tab',()=>{
+  const ui=optionsHarness();
+  ui.click('resyncChessPage');
+  assert.equal(ui.actions[0].action,'query');
+  assert.equal(ui.actions[1].action,'send');
+  assert.equal(ui.actions[1].message.action,'coachResync');
+  assert.equal(ui.actions[1].tabId,42);
+  assert.match(ui.element('pageStatus').textContent,/Resync started/);
+  assert.equal(ui.actions.some(a=>a.action==='reload'),false);
+});
+
 test('visible overlay has a definite contrasting foreground and background',()=>{
   assert.match(css,/color:\s*#ffffff\s*!important/);
   assert.match(css,/background:\s*#182633\s*!important/);
   assert.match(css,/visibility:\s*visible\s*!important/);
   assert.match(html,/id="checkChessPage"/);
   assert.match(html,/id="reloadChessPage"/);
+  assert.match(html,/id="resyncChessPage"/);
 });
 
 test('analysis time uses a freely editable numeric input, not four fixed choices',()=>{

@@ -88,6 +88,12 @@ function harness(respond,pathname='/play/computer',options=null){
         listener({action:'coachStatus'},null,value=>{response=value;});
       return response;
     },
+    resync(){
+      let response=null;
+      for(const listener of contentListeners)
+        listener({action:'coachResync'},null,value=>{response=value;});
+      return response;
+    },
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
     visibility(hidden){document.hidden=hidden;for(const listener of events.get('visibilitychange')||[])listener();},
     key(key,overrides={}){for(const listener of events.get('keydown')||[])listener({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
@@ -115,6 +121,65 @@ test('Shadow DOM label receives startup, analysis and updated results',async()=>
   h.mutate();
   await h.advance(200);
   assert.match(h.shadowText,/Chessboard unavailable/);
+});
+
+test('Resync board discards cached position and requests fresh full-strength analysis',async()=>{
+  const h=harness();
+  await h.advance(0);
+  const before=h.requests.filter(r=>r.action==='analyze').length;
+  assert.equal(before,1);
+  const result=h.resync();
+  assert.equal(result.ok,true);
+  assert.equal(result.started,true);
+  assert.match(h.text,/Resyncing board/);
+  await h.advance(0);
+  assert.equal(h.requests.filter(r=>r.action==='analyze').length,before+1);
+  assert.equal(h.requests.at(-1).elo,'full');
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+test('Resync board refuses missing or unreadable positions without false success',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.state.missing=true;
+  const result=h.resync();
+  assert.equal(result.ok,false);
+  assert.match(result.error,/No readable chessboard/);
+});
+test('Resync board rejects unreconstructable midgame positions without losing tracking',async()=>{
+  const h=harness();
+  await h.advance(0);
+  const initialAnalysisCount=h.requests.filter(r=>r.action==='analyze').length;
+  h.state.placement=e4;
+  h.mutate();
+  await h.advance(200);
+  assert.equal(h.text,'Waiting for opponent');
+  const result=h.resync();
+  assert.equal(result.ok,false);
+  assert.match(result.error,/no FEN or move history/i);
+  assert.equal(h.text,'Waiting for opponent');
+  assert.equal(h.requests.filter(r=>r.action==='analyze').length,initialAnalysisCount);
+});
+test('resync from options can queue on a background Chess.com tab',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.visibility(true);
+  const result=h.resync();
+  assert.equal(result.ok,true);
+  assert.equal(result.queued,true);
+  assert.equal(result.started,false);
+  h.visibility(false);
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('Resync button does not silently resume a paused coach',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.key('h');
+  const result=h.resync();
+  assert.equal(result.ok,false);
+  assert.match(result.error,/paused/);
+  assert.equal(h.text,undefined);
 });
 
 test('visible content script immediately reports startup instead of remaining blank',async()=>{

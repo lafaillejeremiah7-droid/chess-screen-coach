@@ -100,8 +100,10 @@ function popupHarness({url='https://www.chess.com/play/computer',isInjected=true
   const chrome={
     tabs:{
       query:async()=>[{id:7,url}],
-      sendMessage:async()=>{
+      sendMessage:async(_tabId,message)=>{
         if(!isInjected)throw Error('Receiving end does not exist');
+        if(message.action==='coachResync')
+          return {ok:true,started:true,boardFound:true};
         return {injected:true,boardFound:true,hidden:false,status:'Move pawn from e2 to e4'};
       }
     },
@@ -128,8 +130,27 @@ test('toolbar popup still displays an actionable error without a content script'
   assert.equal(ui.el('suggestion').textContent,'Move pawn from e2 to e4');
 });
 
+test('popup Resync board sends the resync action and reports it started',async()=>{
+  const ui=popupHarness();
+  await flush();
+  await ui.click('resync');
+  await flush();
+  assert.match(ui.el('suggestion').textContent,/Resyncing board/);
+  assert.match(ui.el('detail').textContent,/Previous position cleared/);
+  assert.equal(ui.el('resync').disabled,false);
+});
+test('popup Resync board reports a missing page script',async()=>{
+  const ui=popupHarness({isInjected:false});
+  await flush();
+  await ui.click('resync');
+  await flush();
+  assert.match(ui.el('suggestion').textContent,/Resync failed/);
+  assert.match(ui.el('detail').textContent,/Repair display/);
+});
+
 test('popup has an accessible entry point even when Chess.com overlay fails',()=>{
   assert.match(html,/id="suggestion"/);
   assert.match(html,/id="repair"/);
+  assert.match(html,/id="resync"/);
   assert.match(html,/src="popup.js"/);
 });
