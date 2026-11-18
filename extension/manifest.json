@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Chess Study Coach — Full Stockfish 19",
-  "version": "0.7.11",
-  "description": "Standalone FULL Stockfish 19 NNUE WASM, no Lite fallback, Python or terminal required.",
+  "name": "Full Stockfish 19 — Live Board",
+  "version": "0.8.0",
+  "description": "Minimal standalone Full Stockfish 19 with live Chess.com board reading.",
   "host_permissions": [
     "https://www.chess.com/*",
     "https://chess.com/*"
@@ -24,16 +24,8 @@
     }
   ],
   "permissions": [
-    "storage",
-    "scripting",
-    "tabs",
     "offscreen"
   ],
-  "options_page": "options.html",
-  "action": {
-    "default_title": "Chess Screen Coach — view suggestion and repair",
-    "default_popup": "popup.html"
-  },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
