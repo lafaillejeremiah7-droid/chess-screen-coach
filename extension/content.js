@@ -12,7 +12,7 @@
   // Ignore a second injection into the same extension execution context.
   if(globalThis.__ChessCoachContentActive)return;
   const SETTLE_MS=180, RETRY_MS=2000;
-  let currentFen=null,currentBoard=null,lastColor=null;
+  let currentFen=null,currentBoard=null,lastColor=null,lastPlacement=null;
   let lastSnapshotKey=null,settledText=null,analysisPending=false;
   let processing=false,dirty=false,generation=0,retryAt=0,badSnapshots=0;
   let observer=null,workTimer=null,watchTimer=null,lastPath=location.pathname;
@@ -107,7 +107,7 @@ function eligible(){
   function reset(){
     generation++;
     observer?.disconnect();observer=null;
-    currentFen=null;currentBoard=null;lastColor=null;
+    currentFen=null;currentBoard=null;lastColor=null;lastPlacement=null;
     analysisPending=false;retryAt=0;
     lastSnapshotKey=null;settledText=null;badSnapshots=0;lockedPlayerColor=null;
     document.getElementById("chess-study-no-share-overlay")?.remove();
@@ -184,7 +184,13 @@ function eligible(){
         show("Chessboard unavailable; waiting for it to return.");
         return;
       }
-      if(snapshot.board!==currentBoard){
+      const newBoard=snapshot.board!==currentBoard;
+      // A new game can start on the same URL without reloading the content script.
+      // Re-detect the player's color for a fresh setup; do not use past moves.
+      if(snapshot.placement===reader.initial&&lastPlacement!==null&&
+         (newBoard||lastPlacement!==reader.initial))lockedPlayerColor=null;
+      lastPlacement=snapshot.placement;
+      if(newBoard){
         // A re-render can replace the board; read the new element.
         currentBoard=snapshot.board;
         lastColor=snapshot.myColor;
