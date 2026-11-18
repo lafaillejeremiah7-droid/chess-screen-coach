@@ -1,0 +1,38 @@
+name: Verify terminal Stockfish 19
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          node --check extension/board.js
+          node --check extension/content.js
+          node --check extension/background.js
+          node --test tests/*.test.mjs
+      - run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests -p 'test_*.py'
+      - run: python scripts/install_stockfish19.py
+      - name: Verify unrestricted native Stockfish 19 search
+        run: |
+          python - <<'PY'
+          import chess, chess.engine, server
+          with chess.engine.SimpleEngine.popen_uci(str(server.ENGINE_PATH)) as engine:
+              assert engine.id.get("name", "").startswith("Stockfish 19")
+              assert "UCI_LimitStrength" in engine.options
+              engine.configure({"UCI_LimitStrength": False, "Threads": 1, "Hash": 16})
+              server.ENGINE=engine
+              result=server.analyze(chess.STARTING_FEN)
+              assert result["uci"] in [move.uci() for move in chess.Board().legal_moves]
+          PY
