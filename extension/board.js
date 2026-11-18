@@ -151,15 +151,51 @@
     }
     return null;
   }
+  // Recover the board's physical orientation from on-screen piece positions,
+  // not old moves or the player's configured side. Piece classes encode actual
+  // chess ranks; getBoundingClientRect measures where those ranks are rendered.
+  function observedBottomColor(board){
+    const samples=[];
+    let nodes=[];
+    try{nodes=[...board.querySelectorAll(".piece,[data-piece]")];}catch{return null;}
+    for(const node of nodes){
+      const cls=node.getAttribute?.("class")||"";
+      const square=squareFrom(node.getAttribute?.("data-square")||"")||squareFrom(cls);
+      const rect=node.getBoundingClientRect?.();
+      if(!square||!rect||!Number.isFinite(rect.top)||!Number.isFinite(rect.height)||
+         rect.height<2)continue;
+      samples.push({rank:Number(square.split(":")[1]),y:rect.top+rect.height/2});
+    }
+    const boardRect=board.getBoundingClientRect?.();
+    const minDy=(boardRect?.height||320)/12;
+    let white=0,black=0;
+    for(let i=0;i<samples.length;i++){
+      for(let j=i+1;j<samples.length;j++){
+        const dr=samples[i].rank-samples[j].rank;
+        const dy=samples[i].y-samples[j].y;
+        if(Math.abs(dr)<2||Math.abs(dy)<minDy)continue;
+        if(dr*dy<0)white++;
+        else black++;
+      }
+    }
+    if(white>0&&black===0)return "w";
+    if(black>0&&white===0)return "b";
+    if(white>=3&&white>=black*4)return "w";
+    if(black>=3&&black>=white*4)return "b";
+    return null;
+  }
   function declaredBottomColor(board){
     const explicit=color(board?.getAttribute?.("data-orientation")||
       board?.getAttribute?.("orientation"));
-    if(explicit)return explicit;
-    if(board?.classList?.contains?.("flipped")||
-       board?.classList?.contains?.("orientation-black")||
-       board?.classList?.contains?.("board-flipped"))return "b";
-    // No declaration: orientation() displays a default but may be wrong.
-    return null;
+    const flipped=board?.classList?.contains?.("flipped")||
+      board?.classList?.contains?.("orientation-black")||
+      board?.classList?.contains?.("board-flipped");
+    const declared=explicit||(flipped?"b":null);
+    const observed=observedBottomColor(board);
+    // A flipping animation can temporarily contradict the DOM orientation
+    // flag. Don't map the clock to the wrong player during that transition.
+    if(declared&&observed&&declared!==observed)return null;
+    return declared||observed;
   }
   function clockColor(clock,board){
     const direct=explicitClockColor(clock);
@@ -169,11 +205,22 @@
     if(parentColor)return parentColor;
     const bottom=declaredBottomColor(board);
     if(!bottom)return null;
+    const top=bottom==="w"?"b":"w";
     if(hasClass(clock,"clock-bottom"))return bottom;
-    if(hasClass(clock,"clock-top"))return bottom==="w"?"b":"w";
+    if(hasClass(clock,"clock-top"))return top;
     const layout=clock?.closest?.(".clock-top,.clock-bottom");
     if(hasClass(layout,"clock-bottom"))return bottom;
-    if(hasClass(layout,"clock-top"))return bottom==="w"?"b":"w";
+    if(hasClass(layout,"clock-top"))return top;
+    // Common Chess.com clock components have "clock-player-turn" but no
+    // color class. Identify top/bottom from the current on-screen geometry.
+    const boardBox=board?.getBoundingClientRect?.();
+    const clockBox=clock?.getBoundingClientRect?.();
+    if(!boardBox||!clockBox||!Number.isFinite(boardBox.top)||
+       !Number.isFinite(boardBox.bottom)||!Number.isFinite(clockBox.top)||
+       !Number.isFinite(clockBox.bottom))return null;
+    const gap=Math.max(8,(boardBox.height||boardBox.bottom-boardBox.top)/16);
+    if(clockBox.bottom<=boardBox.top+gap)return top;
+    if(clockBox.top>=boardBox.bottom-gap)return bottom;
     return null;
   }
   function activeClock(clock){
