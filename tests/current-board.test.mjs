@@ -96,7 +96,7 @@ test('board orientation does not change piece squares or side to move',()=>{
   assert.equal(black.reader.currentFen(bs,'w').fen,middle+' b - - 0 1');
 });
 test('missing king is detected instead of inventing a position',()=>{
-  const h=harness('8/8/8/8/8/8/8/4K3');
+  const h=harness('8/8/8/8/8/8/4P3/4K3');
   assert.throws(()=>h.reader.snapshot(h.doc),/both kings/);
 });
 test('initial board is not assumed to restore lost castling rights',()=>{
