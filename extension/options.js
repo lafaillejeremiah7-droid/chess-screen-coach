@@ -1,11 +1,10 @@
 "use strict";
-const defaults={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true,showDetails:false};
+const defaults={playerSide:"auto",thinkSeconds:1,strengthElo:1400,fullStrength:true};
 const validTime=seconds=>Number.isFinite(seconds)&&seconds>=0.1&&seconds<=120;
 const $=id=>document.getElementById(id);
 chrome.storage.local.get(defaults,values=>{
   $("playerSide").value=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
   $("thinkSeconds").value=String(validTime(values.thinkSeconds)?values.thinkSeconds:1);
-  $("showDetails").checked=values.showDetails===true;
   $("strengthElo").value=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?String(values.strengthElo):"1400";
   $("fullStrength").checked=values.fullStrength!==false;
   updateStrengthDisplay();
@@ -33,7 +32,6 @@ $("settings").addEventListener("submit",event=>{
     fullStrength:$("fullStrength").checked,
     playerSide:$("playerSide").value,
     thinkSeconds:seconds,
-    showDetails:$("showDetails").checked
   },()=>{
     $("status").textContent=chrome.runtime.lastError?
       "Settings could not be saved.":"Saved. Settings apply to open chess tabs.";
@@ -50,12 +48,12 @@ $("checkEngine").addEventListener("click",async()=>{
   const status=$("connectionStatus");
   status.textContent="Starting bundled Stockfish WASM…";
   try{
-    const [health,control]=await Promise.all([
-      localEngine("health"),localEngine("control")
-    ]);
+    const health=await localEngine("health");
+    const saved=await new Promise(resolve=>
+      chrome.storage.local.get({coachHidden:false},resolve));
     if(!health.stockfish)status.textContent="Bundled Stockfish is not available. Install the standalone build ZIP.";
-    else if(control.hidden)status.textContent="Stockfish is ready, but suggestions are paused. Click Resume suggestions.";
-    else status.textContent="Standalone Stockfish is ready. No Python or terminal needed. Open a Chess.com bot game.";
+    else if(saved.coachHidden)status.textContent="Stockfish is ready, but suggestions are paused. Click Resume suggestions.";
+    else status.textContent="Standalone Stockfish is ready. No Python or terminal needed.";
   }catch(error){
     status.textContent="Standalone engine unavailable: "+String(error?.message||error)+
       ". Install the complete built extension ZIP from GitHub Actions.";
@@ -69,12 +67,7 @@ $("resumeSuggestions").addEventListener("click",()=>{
       status.textContent="Could not save visible state: "+chrome.runtime.lastError.message;
       return;
     }
-    try{
-      await localEngine("control",{hidden:false});
-      status.textContent="Suggestions resumed. Return to Chess.com.";
-    }catch(error){
-      status.textContent="Could not resume bundled engine: "+String(error?.message||error);
-    }
+    status.textContent="Suggestions resumed. Return to Chess.com.";
   });
 });
 
