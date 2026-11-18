@@ -92,3 +92,15 @@ test('analysis time uses a freely editable numeric input, not four fixed choices
   assert.match(source,/const validTime=seconds=>Number\.isFinite\(seconds\)/);
   assert.doesNotMatch(source,/\[0\.2,0\.5,1,2\]/);
 });
+
+test('on-page status is compact, right-aligned and out of the middle of the board',()=>{
+  assert.match(css,/top:\s*12px\s*!important/);
+  assert.match(css,/right:\s*12px\s*!important/);
+  assert.match(css,/font-size:\s*11px\s*!important/);
+  assert.match(css,/max-width:\s*min\(calc\(100vw - 24px\), 260px\)/);
+  assert.doesNotMatch(css,/left:\s*50%\s*!important/);
+  const content=readFileSync(new URL('../extension/content.js',import.meta.url),'utf8');
+  assert.match(content,/top:"12px",right:"12px",left:"auto",transform:"none"/);
+  assert.match(content,/font: 500 11px\/1\.3 system-ui/);
+  assert.doesNotMatch(content,/translateX\(-50%\)/);
+});

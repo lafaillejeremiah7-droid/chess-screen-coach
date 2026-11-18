@@ -68,9 +68,9 @@
     host.setAttribute("aria-live","polite");
     // Inline important declarations beat competing Chess.com and extension CSS.
     const hostStyle={
-      position:"fixed",top:"64px",left:"50%",transform:"translateX(-50%)",
+      position:"fixed",top:"12px",right:"12px",left:"auto",transform:"none",
       display:"block",visibility:"visible",opacity:"1",zIndex:"2147483647",
-      pointerEvents:"none",width:"max-content",maxWidth:"calc(100vw - 24px)"
+      pointerEvents:"none",width:"max-content",maxWidth:"min(calc(100vw - 24px), 260px)"
     };
     for(const [name,value] of Object.entries(hostStyle))
       host.style?.setProperty?.(name.replace(/[A-Z]/g,c=>"-"+c.toLowerCase()),value,"important");
@@ -81,19 +81,19 @@
       const root=host.attachShadow({mode:"open"});
       const css=document.createElement("style");
       css.textContent=`
-        :host { all: initial; position: fixed !important; top: 64px !important;
-          left: 50% !important; transform: translateX(-50%) !important;
+        :host { all: initial; position: fixed !important; top: 12px !important;
+          right: 12px !important; left: auto !important; transform: none !important;
           display: block !important; visibility: visible !important;
           opacity: 1 !important; z-index: 2147483647 !important;
-          pointer-events: none !important; max-width: calc(100vw - 24px) !important; }
+          pointer-events: none !important; max-width: min(calc(100vw - 24px), 260px) !important; }
         #chess-study-no-share-overlay-text {
           all: initial; box-sizing: border-box; display: block;
-          max-width: min(calc(100vw - 24px), 480px);
-          padding: 8px 12px; background: #182633; color: #fff;
-          border: 1px solid #d1d5db; border-radius: 7px;
-          box-shadow: 0 3px 12px rgba(0,0,0,.55);
-          font: 600 14px/1.4 system-ui,-apple-system,sans-serif;
-          white-space: normal; overflow-wrap: anywhere; text-align: center;
+          max-width: min(calc(100vw - 24px), 260px);
+          padding: 4px 8px; background: #182633; color: #fff;
+          border: 1px solid #3b4f63; border-radius: 6px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.3);
+          font: 500 11px/1.3 system-ui,-apple-system,sans-serif;
+          white-space: normal; overflow-wrap: anywhere; text-align: left;
         }`;
       const label=document.createElement("div");
       label.id="chess-study-no-share-overlay-text";

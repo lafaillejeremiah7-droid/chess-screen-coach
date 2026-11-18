@@ -1,28 +1,29 @@
 #chess-study-no-share-overlay {
-  /* A high-contrast status banner that cannot disappear into Chess.com's theme. */
+  /* Compact status badge, out of the center of the chessboard. */
   position: fixed !important;
-  top: 64px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
+  top: 12px !important;
+  right: 12px !important;
+  left: auto !important;
+  transform: none !important;
   display: block !important;
   visibility: visible !important;
   width: max-content !important;
-  max-width: min(calc(100vw - 24px), 480px) !important;
+  max-width: min(calc(100vw - 24px), 260px) !important;
   box-sizing: border-box !important;
-  padding: 8px 12px !important;
+  padding: 4px 8px !important;
   color: #ffffff !important;
   background: #182633 !important;
-  border: 1px solid #d1d5db !important;
-  border-radius: 7px !important;
-  box-shadow: 0 3px 12px rgba(0,0,0,.55) !important;
+  border: 1px solid #3b4f63 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3) !important;
   opacity: 1 !important;
   z-index: 2147483647 !important;
   font-family: system-ui, -apple-system, sans-serif !important;
-  font-size: 14px !important;
-  font-weight: 600 !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
   font-style: normal !important;
-  line-height: 1.4 !important;
-  text-align: center !important;
+  line-height: 1.3 !important;
+  text-align: left !important;
   letter-spacing: normal !important;
   text-shadow: none !important;
   white-space: normal !important;
