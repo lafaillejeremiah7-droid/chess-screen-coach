@@ -7,8 +7,10 @@ const manifest=JSON.parse(readFileSync(new URL('../extension/manifest.json',impo
 const background=readFileSync(new URL('../extension/background.js',import.meta.url),'utf8');
 
 test('extension is injected on Chess.com including human-game URLs',()=>{
-  assert.equal(manifest.version,'0.6.8');
+  assert.equal(manifest.version,'0.6.9');
   assert.ok(manifest.permissions.includes('storage'));
+  assert.ok(manifest.host_permissions.includes('https://www.chess.com/*'));
+  assert.ok(manifest.host_permissions.includes('https://chess.com/*'));
   assert.equal(manifest.options_page,'options.html');
   assert.ok(manifest.content_scripts[0].matches.includes('https://www.chess.com/*'));
   assert.ok(manifest.content_scripts[0].matches.includes('https://chess.com/*'));

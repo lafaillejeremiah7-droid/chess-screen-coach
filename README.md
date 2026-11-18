@@ -1,3 +1,5 @@
+> **v0.6.9 visible extension troubleshooting:** When Chess Study Coach starts on Chess.com, it displays a high-contrast status line immediately. It then reports whether board recognition, Python health, or move analysis is failing. In **chrome://extensions → Chess Study Coach → Details → Extension options**, click **Check Chess.com page**. This checks whether the actual webpage script was injected, unlike **Check connection**, which only verifies the local Python server. Click **Reload Chess.com tab** to reinitialize a tab after updating the unpacked extension. Chrome must grant Chess Study Coach access to Chess.com. A successful server health check alone cannot confirm webpage injection. No screen-share flow is required for this extension.
+
 > **v0.6.8 suggestion recovery:** On startup, the Chess.com extension now synchronizes its persisted visible/hidden state with the local Python server. This fixes a session left paused by the previous H-key state. In Chrome extension **Details → Extension options**, use **Check connection** to verify Python/Stockfish or **Resume suggestions** to unpause the extension and local server. The small top-of-page instruction is more legible. To install this update on a Chromebook, update the actual unpacked `extension` folder and reload both the extension and the Chess.com tab; updating only the Linux server does not update an extension loaded from Downloads.
 
 > **API boundary hardening:** The Python loopback server now rejects unexpected Host headers and cross-site Origin headers, while accepting direct loopback requests and the Chrome extension's service worker origin. A webpage from another site cannot POST to the local coach through ordinary browser requests.
@@ -119,7 +121,7 @@ used by the extension. Linux and Stockfish still require memory.
    the new repository ZIP and replace/reload that extension folder too. Updating
    the Linux clone does not update a separate copy in Downloads.
 3. Open `chrome://extensions`, reload **Chess Study Coach**, and confirm its
-   version is **0.6.8**. Reload the Chess.com tab and start a fresh bot game.
+   version is **0.6.9**. Reload the Chess.com tab and start a fresh bot game.
 4. Close the old screen-sharing dashboard and keep one coach tab open while
    checking whether Chromebook lag has stopped.
 

@@ -12,7 +12,7 @@ const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 function harness(respond,pathname='/play/computer',options=null){
   let now=0,serial=0,reads=0;
   const timers=new Map(),elements=new Map(),events=new Map(),observers=[];
-  const requests=[],controlRequests=[];
+  const requests=[],controlRequests=[],contentListeners=[];
   const serverState={hidden:options?.serverHidden===true};
   const state={placement:initial,myColor:'w',board:{isConnected:true}};
   const document={
@@ -36,8 +36,10 @@ function harness(respond,pathname='/play/computer',options=null){
       observe(board){this.board=board;}
       disconnect(){this.board=null;}
     },
-    ChessCoachBoard:{initial,snapshot(){reads++;if(state.invalid)throw Error('Animating');if(state.missing)return null;return {...state};}},
-    chrome:{runtime:{sendMessage(message,callback){
+    ChessCoachBoard:{initial,
+      findBoard(){return state.missing?null:state.board;},
+      snapshot(){reads++;if(state.invalid)throw Error('Animating');if(state.missing)return null;return {...state};}},
+    chrome:{runtime:{onMessage:{addListener(fn){contentListeners.push(fn);}},sendMessage(message,callback){
       if(message.action==='control')controlRequests.push(message);
       else requests.push(message);
       if(message.action==='control'&&typeof message.hidden==='boolean')
@@ -64,6 +66,12 @@ function harness(respond,pathname='/play/computer',options=null){
     get reads(){return reads;},
     get timerCount(){return timers.size;},
     get text(){return elements.get('chess-study-no-share-overlay')?.textContent;},
+    diagnostic(){
+      let response=null;
+      for(const listener of contentListeners)
+        listener({action:'coachStatus'},null,value=>{response=value;});
+      return response;
+    },
     mutate(){for(const observer of observers)if(observer.board)observer.callback();},
     visibility(hidden){document.hidden=hidden;for(const listener of events.get('visibilitychange')||[])listener();},
     key(key,overrides={}){for(const listener of events.get('keydown')||[])listener({key,repeat:false,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,target:{tagName:'BODY',isContentEditable:false},...overrides});},
@@ -80,6 +88,25 @@ function harness(respond,pathname='/play/computer',options=null){
     }
   };
 }
+
+test('visible content script immediately reports startup instead of remaining blank',async()=>{
+  const h=harness();
+  assert.match(h.text,/Chess Study Coach active/);
+  const report=h.diagnostic();
+  assert.equal(report.injected,true);
+  assert.equal(report.boardFound,true);
+  assert.equal(report.visible,true);
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
+test('page diagnostic distinguishes a detected page script from a missing board',async()=>{
+  const h=harness();
+  h.state.missing=true;
+  await h.advance(0);
+  assert.equal(h.diagnostic().boardFound,false);
+  assert.match(h.text,/Chessboard unavailable/);
+});
 
 test('default engine request uses one second',async()=>{
   const h=harness();
