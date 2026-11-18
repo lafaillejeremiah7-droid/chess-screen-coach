@@ -149,7 +149,7 @@
           if(chrome.runtime.lastError){
             resolve({ok:false,error:chrome.runtime.lastError.message});return;
           }
-          resolve(response||{ok:false,error:"No response from local Python server"});
+          resolve(response||{ok:false,error:"No response from bundled Stockfish engine"});
         });
       }catch{
         resolve({ok:false,error:"Extension updated. Reload this chess tab."});
@@ -226,8 +226,8 @@
       if(!healthChecked){
         const health=await request("health");
         if(!current(epoch))return;
-        if(!health.ok){retry(health.error||"Python server unavailable");return;}
-        if(!health.stockfish){retry("Install Stockfish; restart the Python server.");return;}
+        if(!health.ok){retry(health.error||"Bundled Stockfish unavailable");return;}
+        if(!health.stockfish){retry("Bundled Stockfish unavailable. Install the standalone extension ZIP.");return;}
         healthChecked=true;
       }
 
@@ -250,7 +250,7 @@
           }
         }
         if(result && !result.ok && result.status!==400){
-          retry(result.error||"Python server unavailable");
+          retry(result.error||"Bundled Stockfish unavailable");
           return;
         }
         if(result?.ok)nextFen=result.fen;
@@ -281,7 +281,7 @@
       show("Analyzing…");
       const answer=await request("analyze",{fen:currentFen,seconds:settings.thinkSeconds,elo:settings.fullStrength?"full":settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
-      if(!answer.ok){retry(answer.error||"Python server unavailable");return;}
+      if(!answer.ok){retry(answer.error||"Bundled Stockfish unavailable");return;}
       analysisPending=false;retryAt=0;
       settledText=displayInstruction(answer);show(settledText);
     }catch(error){
