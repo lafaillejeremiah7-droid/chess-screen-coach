@@ -100,10 +100,9 @@
   }
 
   function orientation(board){
-    const classes=board.classList;
-    const tag=(board.getAttribute?.("data-orientation")||"").toLowerCase();
-    return tag==="black"||classes?.contains?.("flipped")||
-      classes?.contains?.("orientation-black")||classes?.contains?.("board-flipped")?"b":"w";
+    // Never infer White solely because a board lacks a "flipped" class.
+    // On some Chess.com layouts the orientation is conveyed by geometry.
+    return declaredBottomColor(board);
   }
 
   function declaredPlayerColor(board){
