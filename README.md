@@ -26,3 +26,16 @@ bash start.sh
 Stockfish is installed as `.stockfish/bin/stockfish` by the checksum-verified installer. The local server listens **only** at `127.0.0.1:8765`; stop it with Ctrl+C. Its default analysis budget is one second per position and it never sets UCI Elo or Skill Level limits.
 
 The board reader needs a visible position **and evidence of whose turn it is** (such as an active clock). Piece placement alone cannot reveal the side to move, castling rights, or en-passant rights. If the page does not expose special-move rights, the reader assumes none; that may affect a suggestion. The extension cannot repair information the page does not provide.
+
+## Current-position synchronization (v0.8.1)
+
+The page script re-reads the live board immediately before displaying a Stockfish
+reply. Board replacement, turn changes, hidden tabs and temporary board loss
+invalidate old suggestions. Observers detect board and clock-layout updates;
+a 300 ms scan handles missed events. Each Chess.com tab cancels its own older
+HTTP requests, while the Python server skips queued searches that are already
+superseded by a newer position. The native Stockfish 19 engine remains fully
+unrestricted (UCI_LimitStrength=false) with a one-second analysis budget.
+
+After updating the checkout, restart the Linux terminal server as well as
+reloading the Chrome extension and Chess.com page; both sides contain fixes.
