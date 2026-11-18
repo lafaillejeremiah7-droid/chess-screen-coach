@@ -168,7 +168,6 @@ function eligible(){
     if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
     const epoch=generation;
     try{
-      if(Date.now()<retryAt){schedule(retryAt-Date.now());return;}
       let snapshot;
       try{snapshot=reader.snapshot(document);}
       catch{
@@ -200,6 +199,12 @@ function eligible(){
       // The current DOM snapshot, not prior moves, defines the position.
       const side=playerColor(snapshot);
       const boardKey=snapshotKey(snapshot,side);
+      // A new live position immediately cancels backoff from a failed old one.
+      // Keep the short backoff only when retrying the identical position.
+      if(retryAt>Date.now()){
+        if(lastSnapshotKey!==null&&boardKey!==lastSnapshotKey)retryAt=0;
+        else {schedule(retryAt-Date.now());return;}
+      }
       if(boardKey===lastSnapshotKey&&!analysisPending){
         if(settledText)show(settledText);
         return;
@@ -243,7 +248,7 @@ function eligible(){
         elo:settings.fullStrength?"full":settings.strengthElo});
       if(!unchanged(epoch,snapshot)){if(current(epoch))dirty=true;return;}
       if(!answer.ok){
-        lastSnapshotKey=null; // Recheck the same current board after errors.
+        // analysisPending remains true, so this same board retries after backoff.
         retry(answer.error||"Bundled Stockfish unavailable");
         return;
       }
