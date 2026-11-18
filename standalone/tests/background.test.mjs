@@ -108,17 +108,12 @@ test("concurrent engine checks share one offscreen creation",async()=>{
   assert.ok(results.every(x=>x.ok&&x.stockfish));
   assert.equal(h.offscreenCreates,1);
 });
-test("pause state uses service-worker storage without opening offscreen engine",async()=>{
+test("unused legacy control and history endpoints are rejected",()=>{
   const h=harness();
-  const a=await h.request("control",{hidden:true});
-  assert.equal(a.ok,true);
-  assert.equal(a.hidden,true);
-  assert.equal(h.saved.coachHidden,true);
+  for(const action of ["control","track","recover"]){
+    assert.equal(h.invoke({action},{url:"https://www.chess.com/play/computer"},()=>{}),false);
+  }
   assert.equal(h.contextChecks,0);
-  const b=await h.request("control",{hidden:false});
-  assert.equal(b.ok,true);
-  assert.equal(b.hidden,false);
-  assert.equal(h.saved.coachHidden,false);
 });
 test("untrusted website messages cannot request internal engine operations",()=>{
   const h=harness();
