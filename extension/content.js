@@ -162,7 +162,8 @@
 
   function snapshotKey(snapshot,side){
     return JSON.stringify([snapshot.placement,snapshot.fen||null,
-      snapshot.turn||null,snapshot.castling||null,snapshot.enPassant||null,side]);
+      snapshot.turn||null,snapshot.turnConflict===true,
+      snapshot.castling||null,snapshot.enPassant||null,side]);
   }
   function unchanged(epoch,snapshot){
     if(!current(epoch))return false;
@@ -221,10 +222,13 @@
       // Never reuse a prior FEN when the visible pieces changed.
       let position;
       try{
-        position=reader.currentFen(snapshot,side);
+        position=reader.currentFen(snapshot);
       }catch(error){
-        settledText=null;analysisPending=true;
-        show("Current position unavailable: "+String(error?.message||error));
+        settledText=null;analysisPending=true;lastSnapshotKey=null;
+        const detail=String(error?.message||error);
+        // Failure to verify the turn is not an engine connection failure.
+        show(/^Turn (unknown|indicators disagree)/.test(detail)?
+          detail:"Current position unavailable: "+detail);
         schedule(1000);
         return;
       }
@@ -246,9 +250,10 @@
         show(settledText);
         return;
       }
-      // A page-supplied turn/FEN is authoritative. Without one the extension
-      // can only analyze a conditional position, never assert it is your turn.
-      if(position.turnVerified&&currentFen.split(" ")[1]!==side){
+      // The current turn must be verified from FEN, a live clock or an
+      // explicit indicator. The board's orientation is never turn evidence.
+      if(!position.turnVerified)throw Error("Turn unknown — waiting for active clock or turn indicator.");
+      if(currentFen.split(" ")[1]!==side){
         analysisPending=false;
         settledText="Waiting for opponent";
         show(settledText);
@@ -266,8 +271,7 @@
         return;
       }
       analysisPending=false;retryAt=0;
-      const note=!position.turnVerified?"Turn unverified: ":
-        !position.rulesVerified?"Rule rights unverified: ":"";
+      const note=!position.rulesVerified?"Rule rights unverified: ":"";
       settledText=note+displayInstruction(answer);
       show(settledText);
     }catch(error){
