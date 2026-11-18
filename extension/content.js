@@ -396,8 +396,8 @@
   // chessboard or a local Python/Stockfish failure.
   chrome.runtime?.onMessage?.addListener?.((message,_sender,sendResponse)=>{
     if(message?.action==="coachResync"){
-      if(coachHidden||document.hidden){
-        sendResponse({ok:false,error:"Coach is paused or this Chess.com tab is hidden. Resume it and try again."});
+      if(coachHidden){
+        sendResponse({ok:false,error:"Coach is paused. Resume suggestions and try again."});
         return false;
       }
       let snapshot;
@@ -421,7 +421,9 @@
       reset(); // Invalidates in-flight analysis, cached move and retry cooldown.
       resume(); // Reconnects the board observer and requests a new legal position.
       show("Resyncing board…");
-      sendResponse({ok:true,started:true,boardFound:true});
+      // Settings can be open in another tab; Chrome will resume its board
+      // observer automatically when the Chess.com tab becomes visible.
+      sendResponse({ok:true,started:!document.hidden,queued:document.hidden,boardFound:true});
       return false;
     }
     if(message?.action!=="coachStatus")return false;
