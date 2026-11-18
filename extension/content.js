@@ -22,7 +22,7 @@
   function applySettings(values){
     if(!values)return;
     settings.playerSide=["auto","w","b"].includes(values.playerSide)?values.playerSide:"auto";
-    settings.thinkSeconds=[0.2,0.5,1,2].includes(values.thinkSeconds)?values.thinkSeconds:1;
+    settings.thinkSeconds=Number.isFinite(values.thinkSeconds)&&values.thinkSeconds>=0.1&&values.thinkSeconds<=120?values.thinkSeconds:1;
     settings.strengthElo=Number.isInteger(values.strengthElo)&&values.strengthElo>=1320&&values.strengthElo<=3190?values.strengthElo:1400;
     settings.fullStrength=values.fullStrength!==false;
     settings.showDetails=values.showDetails===true;
@@ -43,9 +43,8 @@
     return lockedPlayerColor;
   }
   function displayInstruction(answer){
-    if(!settings.showDetails||
-       !/^\/(?:analysis|play\/computer|puzzles)(?:\/|$)/.test(location.pathname))
-      return answer.instruction;
+    // Do not suppress optional search details based on the page's game mode.
+    if(!settings.showDetails)return answer.instruction;
     const parts=[answer.instruction];
     if(answer.reason)parts.push(answer.reason);
     if(Number.isInteger(answer.depth))parts.push("Depth "+answer.depth);
