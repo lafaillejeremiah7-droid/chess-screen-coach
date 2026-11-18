@@ -116,34 +116,28 @@
   }
 
 
-  function readMoveHistory(doc){
-    // Prefer a complete, ordered list with explicit plies; never invent moves.
-    for(const selector of ["[data-ply]",".vertical-move-list .node",".move-list .node",".move-text-component"]){
-      let nodes;
-      try{nodes=[...doc.querySelectorAll(selector)];}catch{continue;}
-      if(!nodes.length||nodes.length>400)continue;
-      if(selector==="[data-ply]"){
-        const indexed=nodes.map(n=>({ply:Number(n.getAttribute?.("data-ply")),node:n}))
-          .filter(x=>Number.isInteger(x.ply)&&x.ply>=1);
-        if(indexed.length!==nodes.length)continue;
-        indexed.sort((a,b)=>a.ply-b.ply);
-        if(indexed[0].ply!==1||indexed.some((x,i)=>x.ply!==i+1))continue;
-        nodes=indexed.map(x=>x.node);
-      }
-      const moves=[];
-      for(const node of nodes){
-        const raw=(node.textContent||node.innerText||"").trim();
-        const value=raw.replace(/^\s*\d+\s*\.(?:\.\.)?\s*/,"").replace(/[!?]+/g,"").trim();
-        if(!/^(?:[O0]-[O0](?:-[O0])?|[a-h][1-8][a-h][1-8][qrbn]?|[KQRBN]?[a-h1-8]{0,2}x?[a-h][1-8](?:=[QRBN])?)[+#]?$/.test(value)){
-          moves.length=0;break;
-        }
-        moves.push(value.replace(/0/g,"O"));
-      }
-      if(moves.length>=1)return moves;
+  // The visible board is authoritative. Do not consult move lists, past
+  // suggestions or cached piece positions when preparing a current FEN.
+  const color=value=>{
+    const text=String(value||"").trim().toLowerCase();
+    return text==="w"||text==="white"?"w":text==="b"||text==="black"?"b":null;
+  };
+  function currentTurn(board){
+    for(const attr of ["data-side-to-move","data-color-to-move","data-active-color",
+      "data-turn","data-to-move","turn"]){
+      const turn=color(board.getAttribute?.(attr));
+      if(turn)return turn;
     }
-    return [];
+    return null;
   }
-
+  function ruleMetadata(board){
+    const raw=board.getAttribute?.("data-castling-rights");
+    const castling=typeof raw==="string"&&/^(?:-|K?Q?k?q?)$/.test(raw)&&raw.length>0
+      ?raw:null;
+    const ep=board.getAttribute?.("data-en-passant")||board.getAttribute?.("data-ep-square");
+    const enPassant=typeof ep==="string"&&/^(?:-|[a-h][36])$/.test(ep)?ep:null;
+    return {castling,enPassant};
+  }
   function snapshot(doc){
     const board=findBoard(doc);
     if(!board)return null;
@@ -152,9 +146,27 @@
     const bottomColor=orientation(board);
     const candidate=board.getAttribute?.("data-fen")||board.getAttribute?.("fen")||"";
     const parts=candidate.trim().split(/\s+/);
-    const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?parts.join(" "):null;
-    return {board,placement,bottomColor,myColor:bottomColor,playerColor:declaredPlayerColor(board),fen,moves:readMoveHistory(doc)};
+    // A FEN is useful only if its pieces agree with what is on screen NOW.
+    const fen=parts.length===6&&parts[0]===placement&&/^[wb]$/.test(parts[1])?
+      parts.join(" "):null;
+    const rules=ruleMetadata(board);
+    return {board,placement,bottomColor,myColor:bottomColor,
+      playerColor:declaredPlayerColor(board),fen,
+      turn:fen?parts[1]:currentTurn(board),
+      castling:rules.castling,enPassant:rules.enPassant};
+  }
+  function currentFen(snapshot,assumedTurn){
+    if(snapshot.fen)return {fen:snapshot.fen,turnVerified:true,rulesVerified:true};
+    const turn=snapshot.turn||color(assumedTurn);
+    if(!turn)throw Error("Current side to move is unknown. Select a color in extension settings.");
+    const castling=snapshot.castling||"-";
+    const enPassant=snapshot.enPassant||"-";
+    // Unknown special-move rights must not be invented from piece locations.
+    return {fen:snapshot.placement+" "+turn+" "+castling+" "+enPassant+" 0 1",
+      turnVerified:!!snapshot.turn,
+      rulesVerified:snapshot.castling!==null&&snapshot.enPassant!==null};
   }
 
-  root.ChessCoachBoard={placementFromClasses,placementFromNodes,findBoard,snapshot,readMoveHistory,initial};
+  root.ChessCoachBoard={placementFromClasses,placementFromNodes,findBoard,snapshot,
+    currentFen,initial};
 })(globalThis);
