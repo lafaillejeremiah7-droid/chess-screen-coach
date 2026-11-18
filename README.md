@@ -1,19 +1,19 @@
-# Standalone Chrome extension — v0.7.0
+# Standalone Chrome extension — v0.7.1 (Full Stockfish 19 default)
 
-**No Linux Terminal, Python server, screen sharing, or localhost connection is required for the standalone Chrome extension.** It bundles **Stockfish 19 Lite (single-threaded WASM)**, a legal-move tracker (chess.js), and an offscreen engine worker. The engine runs locally inside Chrome. Lite is weaker than full desktop Stockfish 19; the separate Python dashboard is still available for those who want it.
+**No Linux Terminal, Python server, screen sharing, or localhost connection is required for the standalone Chrome extension.** It bundles **full Stockfish 19 NNUE (single-threaded WASM)**, a legal-move tracker (chess.js), and an offscreen engine worker. The full engine is the default and **there is no automatic Lite fallback**. The NNUE-containing engine package is around 94 MB and may take longer to start on lower-memory Chromebooks than the previous Lite edition. There is no Python process or local server to start.
 
 **Compatibility:** Chrome 116 or later is required. The extension uses `chrome.runtime.getContexts()` for offscreen engine startup; pause/resume is managed by the background service worker so it does not depend on storage APIs unavailable in offscreen documents.\n\n## Install the standalone extension on Chromebook
 
 1. Open the [Standalone Chrome extension build](https://github.com/lafaillejeremiah7-droid/chess-screen-coach/actions/workflows/standalone-extension.yml) workflow.
-2. Open the newest **successful** workflow run for main. Download the artifact named `chess-screen-coach-standalone-v0.7.0` (sign in to GitHub if prompted).
+2. Open the newest **successful** workflow run for main. Download the artifact named `chess-screen-coach-standalone-full-v0.7.1` (sign in to GitHub if prompted).
 3. Extract the downloaded ZIP using Chromebook Files. Open the extracted folder and confirm it contains `manifest.json`, `engine-host.js`, and the `engine` folder.
 4. Open `chrome://extensions`, enable Developer mode, remove the old Chess Study Coach, click **Load unpacked**, and select the extracted folder containing `manifest.json`.
-5. Confirm **version 0.7.0** and allow Chess.com site access. Open a bot game and click the extension icon → **Refresh status** or **Repair display**. In Extension options → **Check connection**, the result should say **Standalone Stockfish is ready**.
+5. Confirm **version 0.7.1** and allow Chess.com site access. Open a bot game and click the extension icon → **Refresh status** or **Repair display**. In Extension options → **Check connection**, the result should say **Standalone Stockfish is ready**.
 6. From then on, Chrome runs the extension when Chess.com is open. **Do not start server.py or leave a terminal open.**
 
 **Important:** GitHub's green **Code → Download ZIP** is the *source code*, not the built standalone extension. It does not contain the compiled `engine-host.js` or the bundled Stockfish JS/WASM. Install the GitHub Actions artifact, not the source ZIP.
 
-The engine package is GPL-3.0; its license is included in the built `engine/COPYING-GPL-3.0.txt`. Engine files are verified against the upstream Stockfish.js 19.0.1 release digests during build. All code executes locally, with no remote JavaScript execution.
+The full engine package is GPL-3.0; its license is included in the built `engine/COPYING-GPL-3.0.txt`. Engine files are verified against the upstream Stockfish.js 19.0.1 release digests during build. All code executes locally, with no remote JavaScript execution.
 
 ---
 
