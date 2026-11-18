@@ -39,7 +39,7 @@ function startEngine(){
   initializing=new Promise((resolve,reject)=>{
     let timer;
     try{
-      engine=new Worker(chrome.runtime.getURL("engine/stockfish-19-lite-single.js"));
+      engine=new Worker(chrome.runtime.getURL("engine/stockfish-19-single.js"));
       readyResolve=()=>{clearTimeout(timer);resolve();};
       readyReject=error=>{clearTimeout(timer);reject(error);};
       engine.onmessage=event=>handleEngineLine(event.data);
@@ -86,14 +86,14 @@ async function analyze(body){
       }catch(error){resetEngine(error);}
     });
     const move=formatMove(fen,result.move);
-    return {...move,elo,seconds,engine:"Stockfish 19 Lite (WASM)",
+    return {...move,elo,seconds,engine:"Stockfish 19 Full (single-threaded WASM)",
       depth:result.depth??null,score_cp:result.score_cp??null,mate_in:result.mate_in??null};
   });
 }
 async function dispatch(action,body={}){
   if(action==="health"){
     await startEngine();
-    return {stockfish:true,python:false,standalone:true,engine:"Stockfish 19 Lite (WASM)"};
+    return {stockfish:true,python:false,standalone:true,engine:"Stockfish 19 Full (single-threaded WASM)"};
   }
   // Visibility is managed by the extension service worker, which has
   // chrome.storage access. Chrome offscreen documents only have runtime.

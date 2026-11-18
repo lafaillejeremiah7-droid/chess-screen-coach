@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Chess Study Coach — No Screen Share",
-  "version": "0.7.0",
-  "description": "Standalone Stockfish 19 Lite WASM chess coach; no Python or terminal required.",
+  "name": "Chess Study Coach — Full Stockfish 19",
+  "version": "0.7.1",
+  "description": "Standalone FULL Stockfish 19 NNUE WASM, no Lite fallback, Python or terminal required.",
   "host_permissions": [
     "https://www.chess.com/*",
     "https://chess.com/*"
