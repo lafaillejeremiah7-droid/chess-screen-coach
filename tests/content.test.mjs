@@ -159,6 +159,19 @@ test('Resync board rejects unreconstructable midgame positions without losing tr
   assert.equal(h.text,'Waiting for opponent');
   assert.equal(h.requests.filter(r=>r.action==='analyze').length,initialAnalysisCount);
 });
+test('resync from options can queue on a background Chess.com tab',async()=>{
+  const h=harness();
+  await h.advance(0);
+  h.visibility(true);
+  const result=h.resync();
+  assert.equal(result.ok,true);
+  assert.equal(result.queued,true);
+  assert.equal(result.started,false);
+  h.visibility(false);
+  await h.advance(0);
+  assert.equal(h.text,'Move pawn from e2 to e4');
+});
+
 test('Resync button does not silently resume a paused coach',async()=>{
   const h=harness();
   await h.advance(0);
