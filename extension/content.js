@@ -395,6 +395,35 @@
   // The settings page can distinguish a missing content script from a missing
   // chessboard or a local Python/Stockfish failure.
   chrome.runtime?.onMessage?.addListener?.((message,_sender,sendResponse)=>{
+    if(message?.action==="coachResync"){
+      if(coachHidden||document.hidden){
+        sendResponse({ok:false,error:"Coach is paused or this Chess.com tab is hidden. Resume it and try again."});
+        return false;
+      }
+      let snapshot;
+      try{snapshot=reader.snapshot(document);}
+      catch(error){
+        sendResponse({ok:false,error:"Cannot read the chessboard yet: "+String(error?.message||error)});
+        return false;
+      }
+      if(!snapshot){
+        sendResponse({ok:false,error:"No readable chessboard found. Open a game board before resyncing."});
+        return false;
+      }
+      // Never discard a usable tracked position when a midgame board has no
+      // verified FEN or complete history to reconstruct the side to move.
+      const recoverable=snapshot.placement===reader.initial||
+        Boolean(snapshot.fen)||(Array.isArray(snapshot.moves)&&snapshot.moves.length>0);
+      if(!recoverable){
+        sendResponse({ok:false,error:"Cannot resync this midgame board: no FEN or move history is available. Open the full game move list."});
+        return false;
+      }
+      reset(); // Invalidates in-flight analysis, cached move and retry cooldown.
+      resume(); // Reconnects the board observer and requests a new legal position.
+      show("Resyncing board…");
+      sendResponse({ok:true,started:true,boardFound:true});
+      return false;
+    }
     if(message?.action!=="coachStatus")return false;
     let boardFound=false,boardError=null;
     try{boardFound=!!reader.findBoard(document);}
