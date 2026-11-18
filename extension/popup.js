@@ -49,6 +49,18 @@ $("repair").addEventListener("click",async()=>{
   }catch(error){report("Repair blocked",String(error?.message||error));}
   finally{$("repair").disabled=false;}
 });
+$("resync").addEventListener("click",async()=>{
+  $("resync").disabled=true;
+  try{
+    const currentTab=await tab();
+    const response=await chrome.tabs.sendMessage(currentTab.id,{action:"coachResync"});
+    if(!response?.ok)throw Error(response?.error||"Page did not confirm resync.");
+    report("Resyncing board…","Previous position cleared; reading the current board.");
+  }catch(error){
+    report("Resync failed",String(error?.message||error)+
+      " Use Repair display if the page script is missing.");
+  }finally{$("resync").disabled=false;}
+});
 $("resume").addEventListener("click",async()=>{
   try{
     await chrome.storage.local.set({coachHidden:false});
