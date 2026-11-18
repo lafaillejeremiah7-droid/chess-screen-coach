@@ -273,7 +273,7 @@ function eligible(){
     if(currentBoard?.isConnected)watchBoard(currentBoard);
     show("Chess Study Coach active — checking chessboard…");
     // This lightweight check only discovers a missing/replaced board or route.
-    // A connected, unchanged board does not trigger reads or Python requests.
+    // An unchanged board does not trigger a new engine request.
     watchTimer=setInterval(()=>{
       if(location.pathname!==lastPath){lastPath=location.pathname;reset();}
       if(!eligible())return;
@@ -289,7 +289,6 @@ function eligible(){
   function setCoachHidden(hidden){
     if(coachHidden===hidden)return;
     coachHidden=hidden;
-    controlRevision++;
     if(hidden){
       stopWatching(); // Invalidates an in-flight response.
       document.getElementById("chess-study-no-share-overlay")?.remove();
