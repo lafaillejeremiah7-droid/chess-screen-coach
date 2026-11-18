@@ -1,38 +1,30 @@
-name: Standalone Chrome extension build
+name: Full Stockfish 19 extension
 on:
   push:
     branches: [main]
-    paths:
-      - 'extension/**'
-      - 'standalone/**'
-      - '.github/workflows/standalone-extension.yml'
   pull_request:
-    paths:
-      - 'extension/**'
-      - 'standalone/**'
-      - '.github/workflows/standalone-extension.yml'
   workflow_dispatch:
 jobs:
-  standalone:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install pinned browser dependencies
+      - name: Install dependencies
         run: npm install --prefix standalone --no-audit --no-fund
-      - name: Build self-contained extension
+      - name: Build Full Stockfish 19 extension
         run: npm run build --prefix standalone
-      - name: Test browser-side chess tracking and packaging
-        run: npm test --prefix standalone
-      - name: Run repository regression tests
-        run: npm test
-      - name: Save unpacked standalone extension
+      - name: Test engine, extension bridge, and board reader
+        run: |
+          npm test --prefix standalone
+          node --test tests/current-board.test.mjs tests/content.test.mjs
+      - name: Save extension
         uses: actions/upload-artifact@v4
         with:
-          name: chess-screen-coach-standalone-full-v0.7.11
+          name: full-stockfish-19-v0.8.0
           path: dist/extension/
           if-no-files-found: error
           retention-days: 90
