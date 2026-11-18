@@ -23,7 +23,7 @@ await cp(source,destination,{recursive:true});
 await build({
   entryPoints:[join(base,"engine-host.mjs")],
   outfile:join(destination,"engine-host.js"),
-  bundle:true,platform:"browser",format:"iife",target:"chrome120",minify:false,
+  bundle:true,platform:"browser",format:"iife",target:"chrome116",minify:false,
   logLevel:"info"
 });
 for(const [filename,expected] of assets){
@@ -39,7 +39,7 @@ for(const [filename,expected] of assets){
 }
 await copyFile(join(stockfish,"Copying.txt"),join(engineDir,"COPYING-GPL-3.0.txt"));
 const manifest=JSON.parse(await readFile(join(destination,"manifest.json"),"utf8"));
-if(manifest.version!=="0.7.2")throw Error("Unexpected extension version");
+if(manifest.version!=="0.7.3")throw Error("Unexpected extension version");
 for(const filename of ["offscreen.html","engine-host.js","engine/stockfish-19-single.js","engine/stockfish-19-single.wasm"]){
   const info=await stat(join(destination,filename));
   if(!info.size)throw Error("Missing or empty engine asset: "+filename);
