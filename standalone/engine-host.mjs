@@ -95,14 +95,8 @@ async function dispatch(action,body={}){
     await startEngine();
     return {stockfish:true,python:false,standalone:true,engine:"Stockfish 19 Lite (WASM)"};
   }
-  if(action==="control"){
-    if(typeof body.hidden==="boolean"){
-      await chrome.storage.local.set({coachHidden:body.hidden});
-      return {hidden:body.hidden};
-    }
-    const values=await chrome.storage.local.get({coachHidden:false});
-    return {hidden:values.coachHidden===true};
-  }
+  // Visibility is managed by the extension service worker, which has
+  // chrome.storage access. Chrome offscreen documents only have runtime.
   if(action==="track")return trackPosition(body.previous,body.placement);
   if(action==="recover")return recoverPosition(body.moves,body.placement);
   if(action==="analyze")return analyze(body);
