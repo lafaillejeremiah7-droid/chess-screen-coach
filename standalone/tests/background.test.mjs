@@ -45,7 +45,7 @@ function harness(){
       assert.equal(receiver({action,...more},sender,resolve),true);
     });
   }
-  return {chrome,request,saved,get offscreenCreates(){return offscreenCreates;},
+  return {chrome,request,invoke:(message,sender,callback)=>receiver(message,sender,callback),saved,get offscreenCreates(){return offscreenCreates;},
     get contextChecks(){return contextChecks;}};
 }
 test("Chrome 116 offscreen creation uses getContexts, not hasDocument",async()=>{
@@ -69,9 +69,9 @@ test("pause state uses service-worker storage and never opens offscreen engine",
   assert.equal(b.hidden,false);
   assert.equal(h.saved.coachHidden,false);
 });
-test("invalid remote website cannot request hidden/health engine state",()=>{
+test("untrusted website messages cannot request internal engine operations",()=>{
   const h=harness();
-  let received=false;
-  const result=h.chrome.runtime; // receiver is intentionally private in the harness.
-  assert.ok(result.id);
+  assert.equal(h.invoke({action:"health"},{url:"https://example.com"},()=>{}),false);
+  assert.equal(h.invoke({action:"control",hidden:true},{url:"https://example.com"},()=>{}),false);
+  assert.equal(h.offscreenCreates,0);
 });
