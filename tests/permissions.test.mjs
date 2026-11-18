@@ -35,7 +35,9 @@ test('standalone WASM bridge authorizes Chess.com game URLs but no other hosts',
       offscreen:{createDocument:async()=>{}},
       runtime:{id:'extension-id',getURL:path=>'chrome-extension://extension-id/'+path,
         getContexts:async()=>[{contextType:'OFFSCREEN_DOCUMENT'}],
-        sendMessage:async()=>({ok:true,stockfish:true,standalone:true}),
+        sendMessage:async message=>message.action==="ping"
+          ?{ok:true,ready:true,host:"offscreen"}
+          :{ok:true,stockfish:true,standalone:true},
         onMessage:{addListener(fn){listener=fn;}}}
     }
   };
