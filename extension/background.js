@@ -1,5 +1,5 @@
 "use strict";
-const ENDPOINT = "http://127.0.0.1:8765/analyze";
+const ENDPOINT = "http://localhost:8765/analyze";
 const active = new Map();
 
 function senderKey(sender) {

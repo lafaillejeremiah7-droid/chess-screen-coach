@@ -144,7 +144,7 @@ def main():
     global ENGINE
     ENGINE = start_engine()
     server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
-    print("Full Stockfish 19 ready. Listening at http://127.0.0.1:8765", flush=True)
+    print("Full Stockfish 19 ready. Health check: http://localhost:8765/health", flush=True)
     print("Leave this terminal open. Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()
