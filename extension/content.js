@@ -116,8 +116,15 @@
         }
         inFlight = null;
         if (error || !response?.ok) {
+          if (!error && response?.status === 400) {
+            settled = true;
+            show(response.error || "Waiting for a valid board position");
+            return;
+          }
           retryAfter = Date.now() + 2000;
-          show("Stockfish unavailable — retrying");
+          if (error || !response) show("Reload the Chess.com tab to reconnect the extension");
+          else if (response.status === 409) show("Board analysis superseded — retrying");
+          else show(response.error || "Local Stockfish service failed — retrying");
           return;
         }
         settled = true;

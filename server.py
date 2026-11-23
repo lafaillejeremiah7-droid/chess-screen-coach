@@ -62,12 +62,20 @@ def position_from_fen(fen: str) -> chess.Board:
 
 
 def analyze(fen: str, request_token: int | None = None):
+    global ENGINE
     board = position_from_fen(fen)
     with ENGINE_LOCK:
         # Lock waiters are checked before using CPU: obsolete searches are skipped.
         if request_token is not None and not is_latest(request_token):
             raise SupersededRequest()
-        result = ENGINE.play(board, chess.engine.Limit(time=ANALYSIS_SECONDS))
+        if ENGINE is None or ENGINE.returncode.done():
+            ENGINE = start_engine()
+        try:
+            result = ENGINE.play(board, chess.engine.Limit(time=ANALYSIS_SECONDS))
+        except chess.engine.EngineTerminatedError:
+            ENGINE.close()
+            ENGINE = None
+            raise
         # A new board can arrive during this one-second search.
         if request_token is not None and not is_latest(request_token):
             raise SupersededRequest()
@@ -98,7 +106,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.reply(200, {"ok": True, "engine": "Stockfish 19 Full", "seconds": ANALYSIS_SECONDS})
+            engine = ENGINE
+            if engine is None or engine.returncode.done():
+                self.reply(503, {"ok": False, "error": "Stockfish stopped. Next analysis will restart it."})
+            else:
+                self.reply(200, {"ok": True, "engine": "Stockfish 19 Full", "seconds": ANALYSIS_SECONDS})
         else:
             self.reply(404, {"error": "Not found"})
 
@@ -140,7 +152,8 @@ def main():
         pass
     finally:
         server.server_close()
-        ENGINE.quit()
+        if ENGINE is not None and not ENGINE.returncode.done():
+            ENGINE.quit()
 
 
 if __name__ == "__main__":

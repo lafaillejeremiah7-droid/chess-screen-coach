@@ -27,6 +27,10 @@ Stockfish is installed as `.stockfish/bin/stockfish` by the checksum-verified in
 
 The board reader needs a visible position **and evidence of whose turn it is** (such as an active clock). Piece placement alone cannot reveal the side to move, castling rights, or en-passant rights. If the page does not expose special-move rights, the reader assumes none; that may affect a suggestion. The extension cannot repair information the page does not provide.
 
+## If the overlay keeps retrying
+
+Open [the local health check](http://127.0.0.1:8765/health) in Chrome on the computer running the extension. If Chrome cannot connect, run `bash start.sh` in the project's Linux terminal and leave it running. If startup stops, the last terminal error identifies the failed step. When the health page reports `"ok": true`, reload the extension and refresh the Chess.com tab. A finished or invalid position waits for the board to change.
+
 ## Current-position synchronization (v0.8.1)
 
 The page script re-reads the live board immediately before displaying a Stockfish
