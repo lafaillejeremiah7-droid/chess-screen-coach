@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 import threading
 import unittest
 from unittest.mock import patch
@@ -8,6 +9,7 @@ import server
 class FakeEngine:
     def __init__(self):
         self.calls = 0
+        self.returncode = Future()
 
     def play(self, board, limit):
         self.calls += 1
@@ -36,6 +38,15 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result["uci"], "e2e4")
         self.assertEqual(result["engine"], "Stockfish 19 Full")
         self.assertEqual(fake.calls, 1)
+
+    def test_next_analysis_replaces_exited_engine(self):
+        dead, fresh = FakeEngine(), FakeEngine()
+        dead.returncode.set_result(1)
+        with patch.object(server, "ENGINE", dead), patch.object(server, "start_engine", return_value=fresh) as start:
+            self.assertEqual(server.analyze(chess.STARTING_FEN)["uci"], "e2e4")
+            start.assert_called_once_with()
+            self.assertEqual(dead.calls, 0)
+            self.assertEqual(fresh.calls, 1)
 
     def test_rejects_invalid_position(self):
         with self.assertRaises(ValueError):

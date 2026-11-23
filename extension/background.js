@@ -1,5 +1,5 @@
 "use strict";
-const ENDPOINT = "http://127.0.0.1:8765/analyze";
+const ENDPOINT = "http://localhost:8765/analyze";
 const active = new Map();
 
 function senderKey(sender) {
@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return false;
   }
   if (typeof message.fen !== "string" || message.fen.length > 120) {
-    reply({ok: false, error: "Invalid FEN"});
+    reply({ok: false, status: 400, error: "Invalid FEN"});
     return false;
   }
 
@@ -36,12 +36,16 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     body: JSON.stringify({fen: message.fen}),
     signal: controller.signal
   }).then(async response => {
-    const body = await response.json();
+    let body;
+    try { body = await response.json(); } catch {
+      reply({ok: false, error: "Unexpected reply from local server on port 8765"});
+      return;
+    }
     reply(response.ok ? {ok: true, ...body} :
-      {ok: false, error: body.error || "Stockfish error"});
-  }).catch(error => {
-    reply({ok: false, error: controller.signal.aborted ?
-      "Superseded by current board" : String(error?.message || error)});
+      {ok: false, status: response.status, error: body.error || "Stockfish error"});
+  }).catch(() => {
+    reply(controller.signal.aborted ? {ok: false, status: 409} :
+      {ok: false, error: "Cannot reach the local engine. Run bash start.sh in the project terminal."});
   }).finally(() => {
     if (active.get(key) === controller) active.delete(key);
   });

@@ -23,9 +23,15 @@ cd ~/chess-screen-coach
 bash start.sh
 ```
 
+The first startup downloads the Python dependency and native engine. If the system Python lacks a bundled pip, the launcher installs a checksum-verified pip wheel into the project virtual environment. Wait for the terminal to print **Full Stockfish 19 ready** before opening the health page.
+
 Stockfish is installed as `.stockfish/bin/stockfish` by the checksum-verified installer. The local server listens **only** at `127.0.0.1:8765`; stop it with Ctrl+C. Its default analysis budget is one second per position and it never sets UCI Elo or Skill Level limits.
 
 The board reader needs a visible position **and evidence of whose turn it is** (such as an active clock). Piece placement alone cannot reveal the side to move, castling rights, or en-passant rights. If the page does not expose special-move rights, the reader assumes none; that may affect a suggestion. The extension cannot repair information the page does not provide.
+
+## If the overlay keeps retrying
+
+Open [the local health check](http://localhost:8765/health) in Chrome on the computer running the extension. If Chrome cannot connect, run `bash start.sh` in the project's Linux terminal and leave it running. If startup stops, the last terminal error identifies the failed step. When the health page reports `"ok": true`, reload the extension and refresh the Chess.com tab. A finished or invalid position waits for the board to change.
 
 ## Current-position synchronization (v0.8.1)
 

@@ -167,10 +167,23 @@ test("DOM observer also watches the surrounding clock layout",()=>{
 
 test("failed search backs off instead of repeatedly flooding the server",()=>{
   const h=harness();
-  h.respond(0,{ok:false,error:"connection refused"});
+  h.respond(0,{ok:false,error:"Cannot reach the local engine"});
+  assert.match(h.text,/Cannot reach the local engine/);
   h.poll();
   assert.equal(h.requests.length,1);
   h.setNow(12000);
+  h.poll();
+  assert.equal(h.requests.length,2);
+});
+
+test("rejected board waits for a new position",()=>{
+  const h=harness();
+  h.respond(0,{ok:false,status:400,error:"Game over: no legal move"});
+  assert.match(h.text,/Game over/);
+  h.setNow(14000);
+  h.poll();
+  assert.equal(h.requests.length,1);
+  h.state.fen=MOVED;
   h.poll();
   assert.equal(h.requests.length,2);
 });
