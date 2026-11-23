@@ -36,3 +36,23 @@ jobs:
               result=server.analyze(chess.STARTING_FEN)
               assert result["uci"] in [move.uci() for move in chess.Board().legal_moves]
           PY
+      - name: Verify launcher repairs a pip-less venv and serves Chrome's endpoint
+        run: |
+          python -m venv --without-pip .venv
+          bash start.sh > "$RUNNER_TEMP/chess-start.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..90}; do
+            if curl -fsS http://localhost:8765/health > "$RUNNER_TEMP/chess-health.json" 2>/dev/null; then
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/chess-start.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          jq -e '.ok == true and .engine == "Stockfish 19 Full"' "$RUNNER_TEMP/chess-health.json"
+          curl -fsS -H 'Content-Type: application/json' \
+            -d '{"fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}' \
+            http://localhost:8765/analyze | jq -e '.uci | length >= 4'
